@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output (per-package .gitignore files handle apps/mobile and android specifics)
+dist/
+dist-ssr/
+build/
+out/
+
+# Env files
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor / IDE
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Coverage / test artifacts
+coverage/
+.nyc_output/
+
+# Misc
+*.tmp
+*.tmp.*
+*~

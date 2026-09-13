@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">CouponKeeper</string>
+    <string name="title_activity_main">CouponKeeper</string>
+    <string name="package_name">com.couponkeeper.app</string>
+    <string name="custom_url_scheme">com.couponkeeper.app</string>
+</resources>
