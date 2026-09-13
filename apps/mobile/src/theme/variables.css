@@ -1,0 +1,48 @@
+/* For information on how to create your own theme, please refer to:
+http://ionicframework.com/docs/theming/ */
+
+/* CouponKeeper design tokens, ported from the UI mockup (see root CLAUDE.md).
+   The mockup only defines a light palette; the dark variant below is derived
+   from the same hues for contrast, since theme switching wasn't in the mockup. */
+:root {
+  --ck-ink: #1f2a24;
+  --ck-paper: #f3efe4;
+  --ck-card: #fbf9f2;
+  --ck-sage: #4c7a5d;
+  --ck-sage-dim: #dce7de;
+  --ck-sienna: #b8562f;
+  --ck-sienna-dim: #f3dccf;
+  --ck-instagram: #8a6dab;
+  --ck-rule: #d8d2c0;
+  --ck-muted: #6b6355;
+  --ck-expired-bg: #eae6d8;
+
+  --ion-font-family: 'Inter', sans-serif;
+  --ion-color-primary: var(--ck-sage);
+  --ion-color-primary-contrast: #ffffff;
+
+  --ion-background-color: var(--ck-paper);
+  --ion-text-color: var(--ck-ink);
+  --ion-toolbar-background: var(--ck-paper);
+  --ion-toolbar-color: var(--ck-ink);
+  --ion-item-background: var(--ck-card);
+  --ion-border-color: var(--ck-rule);
+  --ion-tab-bar-background: var(--ck-card);
+  --ion-tab-bar-color: var(--ck-muted);
+  --ion-tab-bar-color-selected: var(--ck-sage);
+}
+
+/* Dark palette, toggled via the `ion-palette-dark` class on <html> (see stores/settings.ts). */
+:root.ion-palette-dark {
+  --ck-ink: #f3efe4;
+  --ck-paper: #1b211d;
+  --ck-card: #232922;
+  --ck-sage: #6fa382;
+  --ck-sage-dim: rgba(111, 163, 130, 0.18);
+  --ck-sienna: #d97c4f;
+  --ck-sienna-dim: rgba(217, 124, 79, 0.18);
+  --ck-instagram: #a98fc4;
+  --ck-rule: #3a4038;
+  --ck-muted: #9c9484;
+  --ck-expired-bg: #2c3129;
+}

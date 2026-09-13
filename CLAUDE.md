@@ -1,0 +1,219 @@
+# CouponKeeper
+
+## About the Project
+
+CouponKeeper is a mobile app for makers/creators (sellers on their own sites, Etsy, Instagram) to store and track promo codes: creation, status (active / expiring / expired), usage limits, sales-channel association, and a calendar of code validity.
+
+UI reference: [couponkeeper-ui-mockup.html](C:\Tmp\couponkeeper-ui-mockup.html) — a static HTML mockup with three screens (list, creation form, calendar). The mockup defines the design language and data shape, but is not the final spec — screens (especially "Settings", which isn't in the mockup) will be refined as development progresses.
+
+## Project Status
+
+The three mockup screens (Codes list, code-creation form, Calendar) started as a pixel-port with the mockup's exact placeholder content, then Codes was wired to a real local SQLite database (schema, migration, sortable/filterable queries, seed — see Architecture and Data): the list loads real data, and creating, viewing, and deleting a coupon are all real, persisted operations via popups over the list (no more separate create-form route). Channels moved from a hardcoded 3-value union to a user-managed, database-backed entity (create/delete via `ChannelManagerModal`), and Codes gained a full sort + multi-select status/discount-type filter toolbar alongside its channel chips (OpenSpec change `add-coupon-list-filters-and-channel-management`, archived). `CalendarPage` has since also landed as a real, live screen (OpenSpec change `calendar-month-view`, archived — see `openspec/changes/archive/2026-09-13-calendar-month-view/`): a computed month grid with working navigation and a month/year picker, live coupon/channel data, per-day per-channel indicator lines, and its own day-list filter/sort toolbar sharing a component with Codes (`CouponFilterToolbar` — see Architecture and Data). The Settings screen has since moved past its theme-picker-only placeholder too (OpenSpec change `add-settings-default-sort-and-feedback-disclaimer`, archived — see `openspec/changes/archive/2026-09-14-add-settings-default-sort-and-feedback-disclaimer/`): a "default sort" setting shared with and persisted across Codes and Calendar's day list (see Architecture and Data), plus a theme-aware feedback disclaimer linking to couponkeeper.email@gmail.com. Calendar's day-cell coloring was revisited right after, directly (not through OpenSpec, as a small standalone tweak): today's cell now gets a solid, darker `--ck-sage` fill (previously the pale `--ck-sage-dim` tint) and the selected-day outline moved from `--ck-muted` to the lighter `--ck-rule` token — both still existing palette tokens, not new colors. `mockPromoCodes` is no longer read by any screen; `data/promoCode.ts` keeps the `PromoCode` type and the mock array only as ported reference data. Android platform is added with a verified working `assembleDebug` build, most recently a full `clean assembleDebug` rebuild covering all of the above (note: since `@capacitor-community/sqlite` was added, run `npx cap sync android` before the next native build — and remember `pnpm --filter mobile run build` first, since `cap sync` only copies whatever is already in `dist/`). iOS was intentionally skipped in this pass (see Tech Stack below). Git has not been initialized yet.
+
+## Tech Stack
+
+- **Ionic Framework (Vue)** + **Vue 3** (Composition API, `<script setup lang="ts">`) — UI layer and navigation.
+- **Capacitor** — native wrapper. Target platform for now is **Android only**; iOS will be added later, so avoid Android-specific assumptions where easily avoidable. iOS can't be built or run on this Windows dev machine at all (Xcode is macOS-only) — adding the `ios/` platform is deferred until there's Mac/CI access.
+- **TypeScript** everywhere, including the store and data layer.
+- **Vite** — build tool (standard for Ionic Vue).
+- **Pinia** — app state, separate stores per domain, not one shared store: `settings.ts` (theme, plus the shared `defaultSort` used as the default coupon-list sort everywhere it's shown), `coupons.ts` (the coupon list, its own channel/status/discount-type filter state, backing Codes — its `sortBy`/`sortDir` are getters delegating to `settings.ts`'s `defaultSort`, not owned here), `channels.ts` (the user-managed channel list, backing the channel chips/picker/legend and `ChannelManagerModal` everywhere they appear). `CalendarPage` deliberately does *not* get its own Pinia store for its day-list channel/status/discount-type filter state — that's local `ref`s in the component itself; its sort, however, is a `computed` pass-through to that same shared `settings.ts` value (see Architecture and Data).
+- **vue-i18n** — localization engine. `en` is the only locale so far (see Localization below); every user-facing string goes through `t()`, none are hardcoded in templates.
+- **Vue Router** + `IonRouterOutlet` — tab navigation only (Codes / Calendar / Settings), matching the mockup. Coupon creation and detail viewing are **not** routes — see `CouponFormModal`/`CouponDetailModal` below; `/codes/new` used to be a separate top-level route but was replaced by a popup and no longer exists.
+- **pnpm** — package manager, monorepo via `pnpm-workspace.yaml`.
+
+## Architecture and Data
+
+The app is **local-first**: at launch it's an offline on-device promo-code store, with no required backend. Cloud backup/cross-device sync is a deliberately deferred feature, but the repo structure is laid out so a backend can be added without a restructure.
+
+**Local storage:** `@capacitor-community/sqlite` (on-device SQLite) + **Drizzle ORM** via the `sqlite-proxy` driver on top of the plugin. Dev/web preview needs the plugin's web fallback (`jeep-sqlite`, sql.js) — account for this when setting up the dev environment. `jeep-sqlite`'s loader is imported dynamically (`main.ts`, only on `Capacitor.getPlatform() === 'web'`) rather than at module scope, since sql.js is sizeable and native builds never touch it.
+
+**Gotchas in the web fallback (dev server / browser preview only — native Android is unaffected):**
+- `jeep-sqlite` fetches `sql-wasm.wasm` from `/assets/sql-wasm.wasm` at runtime; it isn't bundled by Vite, so a copy lives at `apps/mobile/public/assets/sql-wasm.wasm` (checked in, not generated). If it's ever missing, dev/web preview fails silently-ish (wasm compile error in the console, empty coupon list).
+- `sql.js` is pinned to the exact `1.11.0` patch jeep-sqlite@2.8.0's prebuilt bundle expects (`apps/mobile/package.json`), not just satisfying its `^1.11.0` range — a newer patch (e.g. 1.14.x) is still semver-compatible on the JS API but produces a `sql-wasm.wasm` with a different low-level export table, which throws a `LinkError` at instantiation. If `jeep-sqlite` or `sql.js` versions change, re-verify this pairing and re-copy the wasm from the resolved `sql.js` version's `dist/sql-wasm.wasm`.
+- Drizzle's relational query API (`db.query.<table>.findMany({ with: ... })`) generates SQL using `json_group_array`/`json_array` to nest relations. `sql.js`'s WASM SQLite build doesn't support these — the query doesn't error, it just never resolves. So the `with` API is **not used** anywhere in this codebase; many-to-many joins (coupons ↔ channels) are done as a plain `innerJoin` query, grouped in JS (see `queries/coupons.ts`'s `attachChannels`). `relations()` in `schema.ts` still exists as schema metadata, just not exercised at query time.
+
+**A real native-only bug, found by running the actual APK (not just the web fallback) on an emulator — `client.ts`'s `ensureSchema` runs the migration one statement at a time, never the raw multi-statement file:** `@capacitor-community/sqlite`'s own statement splitter on Android mis-parses drizzle-kit's `--> statement-breakpoint` markers whenever one lands on the same line as the preceding `;` (i.e. `);--> statement-breakpoint` with no newline in between, which is how drizzle-kit emits it after a single-line `CREATE INDEX`) — it silently concatenates that statement with the *next* one into a single blob it tries to compile as one, which then fails with `no such table` for a table that simply hadn't been created yet. The web fallback (sql.js) doesn't have this problem, which is exactly why it went undetected in web-only testing. Fixed by splitting `migrationSql` on `--> statement-breakpoint` ourselves and calling `conn.execute()` once per statement — never hand a multi-statement string to `execute()` here again. If a future migration file adds new statements, this still works with zero changes since the split is generic.
+
+Schema, models, and seed live under `apps/mobile/src/db/`:
+- `schema.ts` — Drizzle sqlite-core schema: `coupons`, `channels`, and the `coupon_channels` many-to-many join table, with indexes (unique on `coupons.code` and `channels.key`, plus lookup indexes on status/end date/discount type/channel id) and `relations()` for schema metadata (not used at query time — see gotchas above).
+- `client.ts` — the actual `@capacitor-community/sqlite` connection wrapped as a Drizzle `sqlite-proxy` instance; applies the generated migration on first connect (guarded by whether `coupons` already exists — there's no real migration runner yet). Two things it deliberately does *not* leave to chance, both found by an on-device repro (see below): connection opening is single-flighted (`getConnection` caches the in-flight promise, not just the resolved connection — the plugin throws "connection already exists" if two callers race to open it), and every statement is funneled through a FIFO queue (`enqueue`) so nothing runs concurrently against the one shared connection.
+- `status.ts` — `deriveCouponStatus(endDate)`: computes `status`/`daysLeft` from the date, not from whatever's stored. Used both when inserting (so the NOT NULL columns have a sane initial value) and when reading (`queries/coupons.ts` always overrides the stored value), so status is never stale.
+- `migrations/` — SQL migration generated via `drizzle-kit generate` (config: `drizzle.config.ts`; regenerate with `pnpm --filter mobile run db:generate` after changing `schema.ts`).
+- `queries/coupons.ts`, `queries/channels.ts` — `listCoupons`/`listChannels`, each sortable by any column and filterable (status, discount type, channel, text search); `createCoupon` inserts a coupon + its channel join row from form input (dates must already be ISO; see `CouponFormModal.vue`/`parseDisplayDate`); `deleteCoupon` removes a coupon by code, deleting its `coupon_channels` rows explicitly first (the schema's `onDelete: 'cascade'` only fires if `PRAGMA foreign_keys = ON`, which this app never sets).
+- `seed.ts` — seeds `channels` and `coupons` (+ the join rows) from `mockPromoCodes`, skipped if the `coupons` table is already non-empty. Called once from `main.ts` on app boot.
+
+Note the data-model shift from `promoCode.ts`: there, `channel` is a single field per code; in the DB, coupons and channels are many-to-many (a coupon can span multiple channels) — the seed and the creation form both map a single chosen channel into that join table, so today's data looks the same, but the schema supports more.
+
+**Wired up so far:** `stores/coupons.ts` (Pinia, `useCouponsStore`) is the single source of truth for the Codes coupon list — `items`, `channelFilter`/`statusFilter`/`discountTypeFilter`, `sortBy`/`sortDir` (getters delegating to `useSettingsStore().defaultSort` — see the shared-default-sort note below), and `load`/`setChannelFilter`/`toggleStatusFilter`/`toggleDiscountTypeFilter`/`setSort`/`create`/`remove` actions that all go through `queries/coupons.ts` (`setSort` writes through `useSettingsStore().setDefaultSort()` before reloading). `stores/channels.ts` (`useChannelsStore`) plays the same role for the channel list (`items`, `load`/`create`/`remove` via `queries/channels.ts`); deleting a channel also re-`load()`s `useCouponsStore` so any coupon that just lost its channel updates in the background. `toViewModel` (exported from `stores/coupons.ts`) converts a raw `CouponWithChannels` DB row into the `PromoCode` view-model every card/detail/calendar view actually renders — reused directly by `CalendarPage` (see below) rather than duplicated. `CodesPage` renders `couponsStore.items` directly and calls `couponsStore.load()`/`channelsStore.load()` on `onIonViewWillEnter`. Creating, viewing, and deleting a coupon are all popups over `CodesPage`, not routes:
+- `CouponFormModal` (the FAB) — same fields as the old `CodeFormPage` route it replaced, taken verbatim (no reformatting of `value`; dates converted from the form's `DD.MM.YYYY` to ISO), calling `couponsStore.create()` on Save. That action inserts the coupon *and* refreshes `items` itself, before the modal even closes, so the list is already correct the instant the user sees it again (see the on-device bug below for why that matters). `v-if="open"` on its root means the component — and its form-field refs — is destroyed and recreated fresh each time it opens, rather than needing manual reset logic. Its channel picker reads live from `useChannelsStore`.
+- `CouponDetailModal` (tapping a `CodeCard`, on either Codes or Calendar) — read-only, every property of the coupon, including a "no channel" fallback for a coupon whose only channel was deleted.
+- `ConfirmDialog` (the × on `CodeCard`, gated by its `deletable` prop) — confirms, then `couponsStore.remove()`. `CalendarPage` never passes `deletable`, since deleting a coupon isn't part of the Calendar flow by design (its own spec — `openspec/specs/calendar-view/`, once archived — explicitly keeps Calendar's coupon cards read-only), not because it lacks real data.
+- `ChannelManagerModal` (the "+" next to Codes' channel chips) — add/delete a channel (name + a curated color swatch, not a free color picker); reuses `ConfirmDialog` for delete confirmation.
+
+`CodesPage`'s channel chips + sort/status/discount-type toolbar are a separate shared component, `CouponFilterToolbar.vue` — extracted so `CalendarPage`'s own day-list toolbar (see below) could reuse the exact same controls without duplicating the markup. It's a pure presentational component (props for `channels`/`channelFilter`/`statusFilter`/`discountTypeFilter`/`sortBy`/`sortDir`, emits for each control) — it reads no store itself; `CodesPage` binds it to `useCouponsStore`, `CalendarPage` binds it to its own local `ref`s. `CodesPage` still owns the "manage channels" `+` button itself (passed into the toolbar's `#channel-extra` slot), since channel management is Codes' concern, not something Calendar's reference design called for.
+
+**The coupon-list sort is a single, shared, persisted value, not per-screen state** (OpenSpec change `add-settings-default-sort-and-feedback-disclaimer`): `stores/settings.ts` owns `defaultSort: { sortBy, sortDir }`, persisted to `localStorage` (`couponkeeper.defaultSort`, JSON-encoded) the same way `theme` is, factory-defaulting to `daysLeft`/`desc`. `stores/coupons.ts`'s `sortBy`/`sortDir` are getters delegating to it, and `CalendarPage`'s `dayListSortBy`/`dayListSortDir` are `computed` pass-throughs to the same store — so changing the sort from the Codes toolbar, the Calendar toolbar, or the Settings screen's own select updates all three the next time each is shown, and the choice survives an app restart. Only the sort field/direction is shared this way; the channel/status/discount-type filters on both screens remain exactly as before (Codes: in `useCouponsStore`; Calendar: local `ref`s), untouched by this change. The 11-entry sort-options list itself (fields × directions, with their `t()` labels) was extracted out of `CouponFilterToolbar.vue` into `utils/couponSort.ts`'s `getCouponSortOptions()`, so the toolbar and the Settings select render from the exact same list instead of two copies that could drift apart.
+
+All popups are styled like the rest of the app (not `ion-alert`/`ion-modal`) and share one structural pattern: a `<Teleport to="body">`-wrapped `position: fixed` backdrop + a bottom-sheet card, itself `header` (fixed) / `body` (scrollable) / for the form and channel-manager popups, `footer` (fixed) — copy this shape for any future popup rather than inventing a new one. Editing an existing coupon is still unimplemented.
+
+**`CalendarPage` is a real, live screen, not the original mockup port.** `utils/calendar.ts` holds its pure date/grid/filter logic, independent of Vue, so it's easy to reason about and spot-check against fixtures:
+- `getMonthGrid({ year, month })` computes a real Monday-first week grid (leading/trailing days from adjacent months dimmed, correct weekday alignment and day counts including leap Februaries) — no hardcoded dates.
+- `getDayChannelLines(days, coupons, channels)` returns, per day, the per-channel indicator-line colors to render. A subtlety worth knowing if this ever needs touching again: it computes each calendar **week's** (row's) active-channel set first, then gives every channel in that set a stable slot for all 7 days of the row (a day where that channel has no active coupon gets `null` in its slot, rendered as an invisible same-size line) — *not* a fresh per-day compaction. The first version compacted per day, which made every other channel's line visibly jump up/down the moment a channel's coupon ended mid-week; this was a deliberate fix, not an oversight.
+- `getCouponsForDate`, `filterDayListCoupons`, `sortDayListCoupons` — the selected-day list's date-range filter (default order: days-left descending), plus its own channel/status/discount-type filter and full sort (mirroring `queries/coupons.ts`'s `sortRowsInMemory` comparators, reimplemented here over the `PromoCode` shape rather than `CouponWithChannels`, since Calendar never touches `useCouponsStore`).
+
+`CalendarPage` itself holds `visibleMonth`, `selectedDate` (defaults to today), and its own day-list channel/status/discount-type filter `ref`s locally — deliberately never written into `useCouponsStore`, so visiting Calendar can't leak into or be leaked into by Codes' own filter state. Its sort is the exception (see the shared-default-sort note above): `dayListSortBy`/`dayListSortDir` are `computed` reads of `useSettingsStore().defaultSort`, and `onDayListSortChange` writes through `setDefaultSort` instead of a local assignment. It fetches all coupons/channels once per visit (`onIonViewWillEnter`, same pattern as Codes) rather than filtering server-side, since the month grid's indicator lines and legend always need the *full*, unfiltered set regardless of what the day-list toolbar below is currently narrowing. A new `MonthYearPickerModal.vue` (same Teleport bottom-sheet pattern as the others; a scrollable year row auto-centered on the visible year, above a 12-month grid) opens from tapping the month/year label.
+
+**A day cell's selection ring must be an `outline`, not a `border` — a real, twice-hit bug:** `.day.sel` originally used `border: 1.5px solid` to draw the black ring shown in the reference mockup. Since a day's channel-indicator lines are `position: absolute` inside that cell, and absolutely-positioned children are placed relative to the *padding* edge, adding a border — even one only added conditionally on `.sel` — shifts that edge, visibly nudging the lines the instant a day is selected. The first fix (always reserving `border: 1.5px solid transparent`, `.sel` only swapping its color, plus `box-sizing: border-box`) stopped the shift, but broke something else: that reserved border insets the padding edge on *every* cell now, not just the selected one, reopening a ~3px gap between every pair of adjacent days' lines (they're meant to run flush edge-to-edge across a row — see the indicator-line note above). `outline` fixes both at once: it's drawn after layout and never touches the padding edge at all, so it can neither shift internal absolute content nor inset where a line's edge lands. If a future change touches `.day`'s box model again, re-check both properties (shift-on-select, edge-to-edge line fusion) — a fix for one has already silently broken the other once.
+
+**Today/selected day-cell colors were revisited after initial ship, for contrast, not correctness:** `.day.today`'s background moved from the pale `--ck-sage-dim` tint to a solid `--ck-sage` fill (with `--ck-card` for the day-number text, which reads legibly against `--ck-sage` in both palettes), so "today" reads as clearly darker/more prominent than a plain cell. `.day.sel`'s outline moved from `--ck-muted` to `--ck-rule` — the app's standard border/divider token — for a visibly lighter ring than before. Both changes stay within the existing token set (no new hardcoded colors), and both automatically adapt between the light and dark palettes the way every other `--ck-*`-based style in this file does.
+
+**A real bug the form popup surfaced — `position: fixed` overlays must be teleported out of `<ion-page>`:** all three overlay components originally rendered as plain DOM children inside whichever `<ion-page>` used them. `ConfirmDialog` and `CouponDetailModal` happened to look fine, but `CouponFormModal` — taller, so the mispositioning was large enough to actually notice — rendered its backdrop far too narrow and vertically clipped. Cause: some Ionic Vue Router page-transition machinery leaves a `transform` (or equivalent) on an `ion-page`/`ion-content` ancestor, which per the CSS spec makes *that* element the containing block for any `position: fixed` descendant instead of the real viewport — so `inset: 0` resolved against a smaller, oddly-sized box instead of the screen. `ConfirmDialog` and `CouponDetailModal` had the exact same latent bug, just small enough not to be obviously wrong. Fixed by wrapping all three in `<Teleport to="body">`, which renders them outside any `ion-page` entirely — the only reliable fix, since the transform can come from Ionic's internals, not anything this app's own CSS controls. Any new full-screen popup needs the same wrapper.
+
+**Two real on-device bugs this surfaced, both now fixed:**
+- *Empty list / failed save on first launch.* Root cause: `main.ts` fired `seedDatabase()` without awaiting it, so `app.mount()` (and the first page's own DB query) could run concurrently with seeding — and `seedDatabase()` itself is several sequential statements (a "does data already exist?" check, then one insert per row), not one atomic step. A page's own first query could land *in the middle* of that sequence — e.g. right after the "already seeded?" check said no but before any row was inserted — see a still-empty table, and never look again (nothing re-triggers a reload once the DB is actually ready). `main.ts` now does `Promise.all([seedDatabase(), router.isReady()]).then(() => app.mount())`, so no page can query the db before seeding has fully settled. Combined with the `client.ts` fixes above (connection singleton + statement queue), this closes out that failure mode.
+- *List not refreshing after saving a coupon, only on manually switching tabs.* `CodeFormPage` navigated back via `router.back()` and trusted `CodesPage`'s own `onIonViewWillEnter` to refetch — that hook fired reliably in the web/`jeep-sqlite` preview but not on the real device, for reasons not fully pinned down (Ionic's router-outlet transition/lifecycle timing on native is the suspect). Moving the list into the `useCouponsStore` Pinia store sidesteps the question entirely: `create`/`remove` update `items` directly, so any view bound to it updates via ordinary Vue reactivity regardless of whether a page-lifecycle hook fires. If a future feature needs "did the data actually change" signal again, prefer wiring it through this store rather than a page-lifecycle hook — hooks are for one-time setup and re-entry loads, not cross-page data propagation.
+
+If a similar "works sometimes, empty/fails other times, or only some views update" symptom shows up again, suspect one of these same two classes of bug: something reading the db before a multi-step write has fully committed, or a view relying on a lifecycle hook to notice a change made elsewhere.
+
+**On Prisma:** the user mentioned Prisma in the stack, but Prisma is a server-side ORM with a query engine that doesn't run inside Capacitor/WebView on the client. So Prisma is **not used** right now — Drizzle replaces it on the client. Prisma is reserved for a future `apps/api`, once a sync backend exists (there it fits naturally on top of Postgres/SQLite on the server).
+
+## Repository Structure (monorepo, pnpm workspaces)
+
+```
+couponkeeper/
+├─ apps/
+│  ├─ mobile/        # Ionic + Vue 3 + Capacitor app — where the main development happens
+│  │  ├─ android/    # Native Android project (generated by `cap add android`, committed to git)
+│  │  ├─ src/
+│  │  │  ├─ views/       # CodesPage, CalendarPage (both fully real/live), SettingsPage, TabsPage
+│  │  │  ├─ components/  # CodeCard (shared by CodesPage and CalendarPage, delete "x" gated by `deletable`, tap-to-open gated by whether `select` is listened to) + ConfirmDialog + CouponDetailModal + CouponFormModal + ChannelManagerModal + CouponFilterToolbar (shared channel/status/discount-type/sort controls, used by both CodesPage and CalendarPage) + MonthYearPickerModal (all overlay components: app-styled Teleport-to-body popups, not ion-alert/ion-modal — see Architecture and Data)
+│  │  │  ├─ stores/      # Pinia: settings.ts (theme + the shared default coupon-list sort), coupons.ts (the coupon list + its own channel/status/discount-type filter state; sort delegates to settings.ts), channels.ts (the user-managed channel list) — see Architecture and Data
+│  │  │  ├─ data/        # promoCode.ts — the PromoCode type + the original mock codes (kept as reference data; no screen reads mockPromoCodes any more)
+│  │  │  ├─ db/          # Drizzle schema/client/migrations/seed for coupons+channels — see Architecture and Data
+│  │  │  ├─ utils/       # calendar.ts (CalendarPage's pure date/grid/filter/sort logic) + date.ts (formatShortDate/formatFullDate/parseDisplayDate) + couponSort.ts (the shared coupon sort-options list, used by CouponFilterToolbar and SettingsPage)
+│  │  │  ├─ i18n/        # vue-i18n setup + locales/en.ts
+│  │  │  ├─ router/      # /tabs/codes, /tabs/calendar, /tabs/settings only — no route for creating/viewing a coupon, see Architecture and Data
+│  │  │  └─ theme/       # variables.css (design tokens, light+dark) + fonts.css (self-hosted fonts)
+│  │  ├─ drizzle.config.ts
+│  │  └─ capacitor.config.ts
+│  └─ api/           # Placeholder for a future sync backend (Prisma). Not implemented until real sync is needed.
+├─ .claude/          # openspec-* skills + opsx/* commands (project-local copies; also installed globally, see Further Workflow), plus launch.json (dev server, for the preview/run tooling)
+├─ openspec/         # OpenSpec data for this repo: config.yaml, specs/ (coupon-channels, coupon-list-filtering, calendar-view, settings), changes/archive/ (all three changes so far are archived) — see Further Workflow
+├─ pnpm-workspace.yaml
+└─ CLAUDE.md
+```
+
+`packages/` for code shared between `mobile` and `api` is not created upfront — add it once real duplicated code appears (entity types, etc.), not preemptively.
+
+## Getting Started
+
+Run everything from the repo root unless noted otherwise.
+
+```bash
+pnpm install                        # install workspace deps
+pnpm --filter mobile run dev        # Vite dev server (browser preview)
+pnpm --filter mobile run build      # type-check + production web build
+pnpm --filter mobile run db:generate  # regenerate the SQL migration after editing src/db/schema.ts
+```
+
+Android:
+
+```bash
+cd apps/mobile
+npx cap sync android                # copy the latest web build into the native project
+cd android && ./gradlew.bat assembleDebug   # -> android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+**Windows JDK gotcha:** the generated Capacitor Android modules require `sourceCompatibility`/`targetCompatibility` 21, but this machine's system `JAVA_HOME` is JDK 17 — Gradle fails with `invalid source release: 21`. `apps/mobile/android/gradle.properties` sets `org.gradle.java.home` to sidestep this, but which JDK it should point at has already moved once: it originally pointed at the JDK bundled with Android Studio (`...\Android Studio\jbr`, JDK 25 at the time), but Android Studio's auto-updated JBR eventually outpaced Gradle's own supported range — Gradle 8.14.3 (this project's wrapper version) can't even start under it (`Unsupported class file major version 69`). It now points at a pinned **Temurin 21** install (`C:\Program Files\Eclipse Adoptium\jdk-21.0.12.101-hotspot`) instead — new enough to compile with `--release 21`, old enough for Gradle 8.14.3 to run on. If that path stops existing (JDK uninstalled/moved) or this JBR-vs-Gradle mismatch resurfaces after a Gradle/AGP upgrade, reinstall with `winget install EclipseAdoptium.Temurin.21.JDK` and update the path.
+
+**An emulator (AVD `Vichara_API36`, API 36) is available on this machine** via the standard SDK tools (`%LOCALAPPDATA%\Android\Sdk\emulator\emulator.exe -avd Vichara_API36`, then `adb install`/`adb logcat`). Use it — not just the web/`jeep-sqlite` fallback — to verify any change touching `@capacitor-community/sqlite` or native plugin behavior before calling it done: the web fallback and real native SQLite have already diverged once (see the migration-splitting bug above), silently, because only the web path had been exercised. `adb forward tcp:9222 localabstract:webview_devtools_remote_<pid>` (get `<pid>` from `adb shell pidof <package>`) exposes a Chrome DevTools Protocol endpoint at `http://localhost:9222/json` for driving/inspecting the real WebView (e.g. via a small script talking to its `webSocketDebuggerUrl`) when UI automation is needed — note the WebView's CSS pixel coordinates need multiplying by `window.devicePixelRatio` (and offsetting by the status bar height) to get physical coordinates for `adb shell input tap`.
+
+## Design System (from the mockup)
+
+Colors are defined as CSS variables — carry them over as Ionic theme tokens rather than hardcoding hex values per component:
+
+| Token | Value | Purpose |
+|---|---|---|
+| `--ink` | `#1F2A24` | primary text, dark surfaces (selected tabbar item, FAB) |
+| `--paper` | `#F3EFE4` | screen background |
+| `--card` | `#FBF9F2` | card and input background |
+| `--sage` | `#4C7A5D` | "active" accent / "own site" channel |
+| `--sienna` | `#B8562F` | "expiring" accent / "Etsy" channel |
+| `--rule` | `#D8D2C0` | borders, dividers |
+| `--muted` | `#6B6355` | secondary text |
+| `#8A6DAB` | `--instagram` | "Instagram" channel (inlined in the mockup, not a variable there — promoted to a token here) |
+
+All tokens live in `src/theme/variables.css` as `--ck-*` (e.g. `--ck-sage`), mapped onto the relevant `--ion-*` globals (`--ion-color-primary`, `--ion-background-color`, `--ion-tab-bar-color`, etc.) so Ionic components pick them up automatically. The mockup only designed a light palette; a dark variant (same hues, adjusted for contrast) lives alongside it under `:root.ion-palette-dark`, toggled by the theme switcher (see Settings below) — Ionic's own `palettes/dark.*.css` files are intentionally **not** imported, since they'd fight our tokens for the same `--ion-*` properties at equal CSS specificity.
+
+**Tab bar selected state:** color alone (`--ion-tab-bar-color-selected: var(--ck-sage)`) doesn't read as clearly "selected" in the light palette as it does in dark — sage and muted happen to sit closer together in lightness/saturation there. `TabsPage.vue` adds a `--ck-sage-dim` pill behind the selected tab (via `::part(native)`, since `ion-tab-button` has no official "selected background" custom property) plus a bolder label, the same "selected = filled" language the filter chips and channel picker already use, rather than tweaking the color tokens themselves.
+
+Fonts: **Fraunces** (headings/brand), **Inter** (interface text), **IBM Plex Mono** (the promo code itself and code input fields) — self-hosted via `@fontsource/*` packages (`src/theme/fonts.css`) rather than the mockup's Google Fonts CDN `@import`, since the app must render offline (local-first, no guaranteed network at runtime).
+
+## Localization
+
+`vue-i18n` (Composition API mode, `useI18n()` / `t()`) is the localization engine, set up in `src/i18n/`. Messages live in `src/i18n/locales/<code>.ts`; only `en.ts` exists today. All UI copy — including strings assembled from data (usage counts, relative dates like "3 days left") — goes through `t()` with interpolation (e.g. `t('codes.usage', { count, limit })`), not string concatenation, so a translator only ever touches the locale files. To add a language: create `locales/<code>.ts` matching `en.ts`'s shape and register it in `i18n/index.ts`'s `messages` map.
+
+## Theming
+
+`src/stores/settings.ts` (Pinia) holds `theme: 'system' | 'light' | 'dark'` and `defaultSort: { sortBy, sortDir }` (the shared default coupon-list sort — see Architecture and Data), each persisted to its own `localStorage` key directly (no persistence plugin — two keys still don't warrant one). Switching theme modes toggles the `ion-palette-dark` class on `<html>`, which the dark-palette block in `variables.css` keys off; `'system'` additionally listens to `prefers-color-scheme` and re-applies on change. Both the theme picker and the default-sort select live on the Settings tab (`ion-segment` for theme; a plain `<select>`, matching `CouponFilterToolbar`'s, for sort — neither designed in the mockup).
+
+## Domain
+
+The core entity is the promo code, its view-model shape defined in `src/data/promoCode.ts` (every card/detail/calendar view renders this shape, produced from a DB row by `stores/coupons.ts`'s `toViewModel`):
+
+```ts
+interface PromoCodeChannel {
+  key: string
+  name: string
+  color: string
+}
+
+interface PromoCode {
+  code: string
+  channel: PromoCodeChannel | undefined   // undefined if the coupon's only channel was deleted
+  discountType: 'percent' | 'amount' | 'shipping'
+  value: string            // "-20%", "-$5"
+  startDate: string        // ISO date
+  endDate: string          // ISO date
+  usageLimit?: number      // unlimited if not set
+  usageCount: number
+  note?: string            // audience note (e.g. "@maker"), shown instead of a usage count
+  daysLeft?: number        // only meaningful when status is 'soon'
+  status: 'active' | 'soon' | 'expired'
+}
+```
+
+`channel` used to be a fixed `'site' | 'etsy' | 'instagram'` union; it's now a resolved reference to a real, user-managed row in the `channels` table (see Architecture and Data) — a maker can rename nothing (channel names are free-text data, not translated, same treatment as `note`/`code`) but can add and delete channels via `ChannelManagerModal`, and every place a channel is shown or picked reads the live list. `status`/`daysLeft` are always derived from the dates (`db/status.ts`'s `deriveCouponStatus`), never trusted from storage. `mockPromoCodes` in the same file still holds the four original sample codes (SUMMER20, ETSY-FALL9, IGFRIENDS, SPRING24) as ported reference data — `seed.ts` seeds the real `coupons`/`channels` tables from it on first boot, but no screen reads the array directly any more.
+
+## Screens and Navigation
+
+Tabbar: **Codes** (list with channel filter chips + sort/status/discount-type toolbar) / **Calendar** (real monthly grid with per-channel indicator lines, navigable via arrows or a month/year picker, plus a filtered/sorted list of coupons active on the selected day) / **Settings** (theme picker, a "default sort" select shared with Codes and Calendar's day list, and a feedback disclaimer — none of it designed in the mockup, all built out as its own OpenSpec change). The FAB on the list screen opens `CouponFormModal` (a popup, not a route — see Architecture and Data).
+
+All three screens started as a mockup pixel-port (see Project Status) and have since diverged from that hardcoded placeholder content as real behavior landed — Codes, Calendar, and now Settings are all fully live.
+
+**Status bar / notch safe area:** `CodesPage`, `SettingsPage`, and `CalendarPage` each build their own header (to match the mockup's look, and — for Settings — to look identical to the other two, not like a stock Ionic title bar) instead of using `<ion-header>`/`<ion-toolbar>` — which means nothing pushes that header below the status bar/camera cutout on its own. Their `.app-header`/`.cal-head` padding-top is `calc(env(safe-area-inset-top) + Npx)` to compensate. No screen uses real `ion-header`/`ion-toolbar` any more (the last one, the old `CodeFormPage` route, was replaced by `CouponFormModal` — a popup, which uses `env(safe-area-inset-bottom)` on its footer instead, since it's the bottom edge that can be covered by a gesture bar). If a future custom-header screen shows the same overlap, it needs the same explicit padding.
+
+**Fixed (non-scrolling) header, `CodesPage` and `SettingsPage`:** `.app-header` is a plain `<div>` sibling of `<ion-content>` inside `<ion-page>` (`ion-page` is a flex column; `ion-content` is the only child that scrolls internally, so anything else in that column just sits fixed above/below it) — **not** nested inside `<ion-content>`, and not wrapped in `<ion-header>` either, since a plain `<ion-header>` around non-`ion-toolbar` content pulls in Ionic's own header shadow, which would fight the custom one below. Its `.brand` title, `font-brand` (Fraunces) class, padding, `border-bottom`, and `box-shadow` values are identical on both screens by design — copy that exact block rather than approximating it if a third screen needs the same header, so they don't silently drift apart again (Settings originally used stock `ion-header`/`ion-toolbar`/`ion-title`, which put its title in the wrong font and gave it Ionic's own, visually different, header shadow instead of this one). `CalendarPage`'s `.cal-head` is still nested inside its `<ion-content>` (unlike Codes'/Settings' `.app-header`) and so still scrolls with the page's content — give it the same fixed-sibling treatment if that's ever raised as an issue there too.
+
+**Coupon detail view:** tapping anywhere on a `CodeCard` (except the delete "×", which stops propagation) emits `select`; both `CodesPage` and `CalendarPage` listen and open `CouponDetailModal` with that coupon's full property set (channel, discount type, value, both dates via `formatFullDate`, usage limit/count, days left, note) in a scrollable body under its own fixed, shadowed header — same visual language as the list header above. `select` is opt-in (only wired up where listened to) and `deletable` is independent of it — Calendar listens for `select` but never passes `deletable`, so its cards open the same read-only detail popup as Codes' but never show a delete control.
+
+## Testing and Linting
+
+Deliberately not fixed yet — decide on the first real feature, rather than carrying a stack "for growth" with no code yet for it to check. Basic hygiene (ESLint + Prettier + vue-tsc) is set up alongside the `apps/mobile` scaffold; a full test runner (unit/e2e) is added as needed.
+
+## Further Workflow: Spec-Driven / OpenSpec
+
+Feature development goes through **OpenSpec** (spec-driven development). The CLI (`@fission-ai/openspec` on npm, binary `openspec`) is installed **globally** on this machine, and its Claude Code integration — the `openspec-*` skills and `/opsx:*` slash commands (propose, new, continue, apply, archive, etc.) — is installed at the user level (`~/.claude/skills/`, `~/.claude/commands/opsx/`), available in every project. `openspec init --tools claude` has also been run **in this repo** (`openspec init . --tools claude --no-animation`), which additionally dropped its own project-local copies of those same skills/commands into `.claude/skills/openspec-*` and `.claude/commands/opsx/` (the tool's default behavior — redundant with the global ones, harmless) plus the actual per-project data in `openspec/config.yaml` (schema: `spec-driven`; `context`/`rules`/`operations` fields left at their commented-out defaults — not yet filled in with this repo's specifics).
+
+Three changes have gone through the workflow so far, all archived — there is no active/in-progress change right now:
+- `add-coupon-list-filters-and-channel-management` — archived (`openspec/changes/archive/2026-09-13-add-coupon-list-filters-and-channel-management/`); its specs (`coupon-channels`, `coupon-list-filtering`) live under `openspec/specs/`.
+- `calendar-month-view` — archived (`openspec/changes/archive/2026-09-13-calendar-month-view/`); its `specs/calendar-view/spec.md` delta is folded into `openspec/specs/calendar-view/`.
+- `add-settings-default-sort-and-feedback-disclaimer` — archived (`openspec/changes/archive/2026-09-14-add-settings-default-sort-and-feedback-disclaimer/`); its deltas (a new `settings` capability, plus updates to `coupon-list-filtering` and `calendar-view` for the shared/persisted default sort) are folded into `openspec/specs/`. The Calendar today/selected day-cell color tweaks that followed were implemented directly, outside this workflow, as a small standalone request rather than a spec-level behavior change — they aren't reflected in any spec.
+
+The first two changes each went through several rounds of maker feedback *after* their tasks were first marked done — each round updated `proposal.md`/`design.md`/`specs/**/spec.md`/`tasks.md` before touching code, rather than leaving the artifacts to drift from what actually shipped. Keep doing that for the next change: a change's planning artifacts should describe the feature as it currently behaves, not just as it was first designed.
+
+## Open Questions
+
+- Cloud backup/sync format (once we get there): a custom `apps/api` on Prisma vs. a third-party BaaS — undecided, left for later.
+- Test stack — see the section above.
+- Whether Settings needs anything beyond theme, default sort, and the feedback disclaimer — no further scope identified yet, but unlike the other two screens it was never designed in the mockup at all, so treat its scope as more open to future additions.
