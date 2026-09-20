@@ -5,74 +5,87 @@
     </div>
 
     <ion-content class="ion-padding">
-      <ion-list inset>
-        <ion-item lines="none">
-          <ion-label>{{ t('settings.theme') }}</ion-label>
-        </ion-item>
-        <ion-item lines="none">
-          <ion-segment :value="settings.theme" @ionChange="onThemeChange">
-            <ion-segment-button value="system">
-              <ion-label>{{ t('settings.themeSystem') }}</ion-label>
-            </ion-segment-button>
-            <ion-segment-button value="light">
-              <ion-label>{{ t('settings.themeLight') }}</ion-label>
-            </ion-segment-button>
-            <ion-segment-button value="dark">
-              <ion-label>{{ t('settings.themeDark') }}</ion-label>
-            </ion-segment-button>
-          </ion-segment>
-        </ion-item>
-
-        <ion-item lines="none">
-          <ion-label>{{ t('settings.sortLabel') }}</ion-label>
-        </ion-item>
-        <ion-item lines="none">
-          <select class="sort-select" :value="sortValue" @change="onSortChange">
-            <option v-for="opt in sortOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-          </select>
-        </ion-item>
-
-        <ion-item lines="none">
-          <ion-label>{{ t('settings.warnDaysBefore') }}</ion-label>
-        </ion-item>
-        <ion-item lines="none">
-          <div class="stepper">
-            <button
-              type="button"
-              class="stepper-btn"
-              :aria-label="t('settings.warnDaysBeforeDecrement')"
-              @click="decrementWarnDaysBefore"
-            >
-              −
-            </button>
-            <input
-              class="stepper-value"
-              type="number"
-              inputmode="numeric"
-              min="0"
-              max="20"
-              step="1"
-              :value="settings.warnDaysBefore"
-              @change="onWarnDaysBeforeInput"
-            />
-            <button
-              type="button"
-              class="stepper-btn"
-              :aria-label="t('settings.warnDaysBeforeIncrement')"
-              @click="incrementWarnDaysBefore"
-            >
-              +
-            </button>
+      <div class="section">
+        <div class="section-title">{{ t('settings.sectionAppearance') }}</div>
+        <div class="section-card">
+          <div class="setting-row">
+            <div class="setting-name">{{ t('settings.theme') }}</div>
+            <ion-segment :value="settings.theme" @ionChange="onThemeChange">
+              <ion-segment-button value="system">
+                <ion-label>{{ t('settings.themeSystem') }}</ion-label>
+              </ion-segment-button>
+              <ion-segment-button value="light">
+                <ion-label>{{ t('settings.themeLight') }}</ion-label>
+              </ion-segment-button>
+              <ion-segment-button value="dark">
+                <ion-label>{{ t('settings.themeDark') }}</ion-label>
+              </ion-segment-button>
+            </ion-segment>
           </div>
-        </ion-item>
-      </ion-list>
+        </div>
+      </div>
 
-      <div class="disclaimer">
-        <i18n-t keypath="settings.feedback" tag="p">
-          <template #email>
-            <a href="mailto:couponkeeper.email@gmail.com">couponkeeper.email@gmail.com</a>
-          </template>
-        </i18n-t>
+      <div class="section">
+        <div class="section-title">{{ t('settings.sectionCoupons') }}</div>
+        <div class="section-card">
+          <div class="setting-row">
+            <div class="setting-name">{{ t('settings.sortLabel') }}</div>
+            <div class="setting-hint">{{ t('settings.sortHint') }}</div>
+            <select class="sort-select" :value="sortValue" @change="onSortChange">
+              <option v-for="opt in sortOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">{{ t('settings.sectionNotifications') }}</div>
+        <div class="section-card">
+          <div class="setting-row">
+            <div class="setting-name">{{ t('settings.warnDaysBefore') }}</div>
+            <div class="setting-hint">{{ t('settings.warnDaysBeforeHint') }}</div>
+            <div class="stepper">
+              <button
+                type="button"
+                class="stepper-btn"
+                :aria-label="t('settings.warnDaysBeforeDecrement')"
+                @click="decrementWarnDaysBefore"
+              >
+                −
+              </button>
+              <input
+                class="stepper-value"
+                type="number"
+                inputmode="numeric"
+                min="0"
+                max="20"
+                step="1"
+                :value="settings.warnDaysBefore"
+                @change="onWarnDaysBeforeInput"
+              />
+              <button
+                type="button"
+                class="stepper-btn"
+                :aria-label="t('settings.warnDaysBeforeIncrement')"
+                @click="incrementWarnDaysBefore"
+              >
+                +
+              </button>
+              <span class="stepper-unit">{{ t('settings.warnDaysBeforeUnit') }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">{{ t('settings.sectionAbout') }}</div>
+        <div class="disclaimer">
+          <i18n-t keypath="settings.feedback" tag="p">
+            <template #email>
+              <a href="mailto:couponkeeper.email@gmail.com">couponkeeper.email@gmail.com</a>
+            </template>
+          </i18n-t>
+        </div>
       </div>
     </ion-content>
   </ion-page>
@@ -81,7 +94,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { IonPage, IonContent, IonList, IonItem, IonLabel, IonSegment, IonSegmentButton } from '@ionic/vue';
+import { IonPage, IonContent, IonLabel, IonSegment, IonSegmentButton } from '@ionic/vue';
 import AppLogo from '@/components/AppLogo.vue';
 import { useSettingsStore, type ThemeMode } from '@/stores/settings';
 import { getCouponSortOptions } from '@/utils/couponSort';
@@ -149,6 +162,47 @@ function onWarnDaysBeforeInput(event: Event) {
   border-radius: 6px;
   flex-shrink: 0;
 }
+.section {
+  margin-bottom: 22px;
+}
+.section-title {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ck-muted);
+  margin: 0 4px 8px;
+}
+.section-card {
+  background: var(--ck-card);
+  border: 1px solid var(--ck-rule);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.setting-row {
+  padding: 14px 16px;
+}
+.setting-row + .setting-row {
+  border-top: 1px solid var(--ck-rule);
+}
+.setting-name {
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ck-ink);
+  margin-bottom: 2px;
+}
+.setting-hint {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ck-muted);
+  margin-bottom: 10px;
+}
+.setting-row > ion-segment {
+  margin-top: 4px;
+}
 .sort-select {
   width: 100%;
   font-family: 'Inter', sans-serif;
@@ -156,7 +210,7 @@ function onWarnDaysBeforeInput(event: Event) {
   font-weight: 500;
   padding: 8px 10px;
   border-radius: 10px;
-  background: var(--ck-card);
+  background: var(--ck-paper);
   border: 1px solid var(--ck-rule);
   color: var(--ck-ink);
 }
@@ -193,12 +247,16 @@ function onWarnDaysBeforeInput(event: Event) {
   font-weight: 600;
   padding: 8px 6px;
   border-radius: 10px;
-  background: var(--ck-card);
+  background: var(--ck-paper);
   border: 1px solid var(--ck-rule);
   color: var(--ck-ink);
 }
+.stepper-unit {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  color: var(--ck-muted);
+}
 .disclaimer {
-  margin: 18px 16px 0;
   padding: 14px 16px;
   border-radius: 12px;
   background: var(--ck-sage-dim);

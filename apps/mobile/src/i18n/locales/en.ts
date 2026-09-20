@@ -112,14 +112,21 @@ export default {
   },
   settings: {
     title: 'Settings',
+    sectionAppearance: 'Appearance',
     theme: 'Theme',
     themeSystem: 'System',
     themeLight: 'Light',
     themeDark: 'Dark',
+    sectionCoupons: 'Coupons',
     sortLabel: 'Default sort',
-    warnDaysBefore: 'Warn about coupon expiry',
+    sortHint: 'Order used by the coupon list and the calendar day view.',
+    sectionNotifications: 'Notifications',
+    warnDaysBefore: 'Expiry warning',
+    warnDaysBeforeHint: 'Notify me this many days before a coupon expires.',
+    warnDaysBeforeUnit: 'days',
     warnDaysBeforeIncrement: 'Increase warning days',
     warnDaysBeforeDecrement: 'Decrease warning days',
+    sectionAbout: 'Feedback',
     feedback: 'We welcome your feedback, suggestions, feature requests, and bug reports at {email}.'
   },
   notifications: {
