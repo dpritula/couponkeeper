@@ -6,6 +6,18 @@ A mobile app for makers and independent sellers — creators running their own s
 
 A maker running promotions across several sales channels (their own site, Etsy, Instagram) ends up with promo codes scattered across notes apps, spreadsheets, and memory: which codes are still active, which are about to expire, which have hit their usage limit, and which channel each one belongs to. CouponKeeper centralizes that: creation, status tracking (active / not started / expiring soon / expired), usage limits, channel association, and a calendar view of code validity — as a local-first, offline-capable app with no account or backend required to use it.
 
+## Screenshots
+
+| Codes | Calendar | Settings |
+|---|---|---|
+| ![Codes list](docs/screenshots/codes.png) | ![Calendar month view](docs/screenshots/calendar.png) | ![Settings](docs/screenshots/settings.png) |
+| The main tab: every coupon as a card with its channel, discount value, validity, and usage, plus channel chips and a sort/status/discount-type filter toolbar above the list. | A monthly grid with a per-channel indicator line under each day a coupon is active, navigable by arrow or a month/year picker, with the same filter toolbar driving a list of coupons active on the selected day below it. | Theme (system/light/dark), the default sort order shared with Codes and Calendar, an expiry-warning threshold, and a feedback contact link. |
+
+| Add a coupon | Coupon detail |
+|---|---|
+| ![New promo code form](docs/screenshots/coupon-form.png) | ![Coupon detail](docs/screenshots/coupon-detail.png) |
+| The creation popup opened from the FAB: code (with a random-code generator), channel, discount type and value, validity window, an optional usage limit, and a free-text note. | A read-only popup with every property of a coupon — status, channel, discount, both dates, usage, and note — opened by tapping any card. |
+
 ## Tech stack
 
 - **Ionic Framework (Vue) + Vue 3** (Composition API, `<script setup lang="ts">`) for the UI layer and navigation.
