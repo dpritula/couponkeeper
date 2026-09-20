@@ -3,7 +3,7 @@
   <div v-if="open" class="form-backdrop" @click.self="handleClose">
     <div class="form-card" role="dialog" aria-modal="true">
       <div class="form-header">
-        <div class="form-title font-brand">{{ t('form.newTitle') }}</div>
+        <div class="form-title font-brand">{{ mode === 'edit' ? t('form.editTitle') : t('form.newTitle') }}</div>
         <button type="button" class="form-close" :aria-label="t('codes.detailClose')" @click="handleClose">×</button>
       </div>
 
@@ -55,11 +55,15 @@
         <div class="date-row">
           <div class="field">
             <label>{{ t('form.start') }}</label>
-            <input v-model="startDate" class="plain-input" />
+            <button type="button" class="date-input" @click="showStartPicker = true">
+              {{ startDate ? formatShortDate(startDate) : t('form.datePlaceholder') }}
+            </button>
           </div>
           <div class="field">
             <label>{{ t('form.end') }}</label>
-            <input v-model="endDate" class="plain-input" />
+            <button type="button" class="date-input" @click="showEndPicker = true">
+              {{ endDate ? formatShortDate(endDate) : t('form.datePlaceholder') }}
+            </button>
           </div>
         </div>
 
@@ -81,22 +85,41 @@
     </div>
   </div>
   </Teleport>
+
+  <DatePickerModal
+    :open="showStartPicker"
+    :model-value="startDate"
+    :title="t('form.start')"
+    @select="onStartDateSelect"
+    @close="showStartPicker = false"
+  />
+  <DatePickerModal
+    :open="showEndPicker"
+    :model-value="endDate"
+    :title="t('form.end')"
+    @select="onEndDateSelect"
+    @close="showEndPicker = false"
+  />
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
-import type { DiscountType } from '@/data/promoCode';
-import { parseDisplayDate } from '@/utils/date';
+import type { DiscountType, PromoCode } from '@/data/promoCode';
+import { formatShortDate } from '@/utils/date';
+import { DuplicateCouponCodeError } from '@/db/queries/coupons';
+import DatePickerModal from '@/components/DatePickerModal.vue';
 import { useChannelsStore } from '@/stores/channels';
 import { useCouponsStore } from '@/stores/coupons';
 
-defineProps<{ open: boolean }>();
+const props = defineProps<{ open: boolean; coupon?: PromoCode | null }>();
 const emit = defineEmits<{ close: [] }>();
 
 const { t } = useI18n();
 const couponsStore = useCouponsStore();
 const channelsStore = useChannelsStore();
+
+const mode = computed<'create' | 'edit'>(() => (props.coupon ? 'edit' : 'create'));
 
 const discountOptions: { value: DiscountType; label: string }[] = [
   { value: 'percent', label: t('form.discountPercent') },
@@ -104,47 +127,96 @@ const discountOptions: { value: DiscountType; label: string }[] = [
   { value: 'shipping', label: t('form.discountShipping') }
 ];
 
-// Ported from the mockup's example values — just the form's starting point, not tied to any existing coupon.
-// `open` is v-if'd, so the component (and these refs) are recreated fresh each time the modal opens.
-const code = ref('ETSYFALL9');
-const channel = ref<string>(channelsStore.items[0]?.key ?? '');
-const discountType = ref<DiscountType>('amount');
-const value = ref('$5');
-const startDate = ref('05.09.2026');
-const endDate = ref('15.09.2026');
-const usageLimit = ref('');
-const note = ref('Fall sale for Etsy subscribers');
+// In edit mode, every field starts from `props.coupon`'s current values. In
+// create mode, these are the mockup's ported example values — just the
+// form's starting point, not tied to any existing coupon. These refs are
+// only initialized once per component *instance*, so the parent is
+// responsible for keying this component itself (not just this internal
+// `v-if="open"`) so it remounts — and these refs re-initialize from fresh
+// props — every time the modal opens or switches to a different coupon.
+const code = ref(props.coupon?.code ?? 'ETSYFALL9');
+const channel = ref<string>(props.coupon?.channel?.key ?? channelsStore.items[0]?.key ?? '');
+const discountType = ref<DiscountType>(props.coupon?.discountType ?? 'amount');
+const value = ref(props.coupon?.value ?? '$5');
+const startDate = ref(props.coupon?.startDate ?? '2026-09-05');
+const endDate = ref(props.coupon?.endDate ?? '2026-09-15');
+const usageLimit = ref(props.coupon?.usageLimit != null ? String(props.coupon.usageLimit) : '');
+const note = ref(props.coupon?.note ?? (props.coupon ? '' : 'Fall sale for Etsy subscribers'));
 
 const saving = ref(false);
 const errorMessage = ref('');
+const showStartPicker = ref(false);
+const showEndPicker = ref(false);
 
 function generateCode() {
   code.value = Math.random().toString(36).slice(2, 10).toUpperCase();
+}
+
+function onStartDateSelect(date: string) {
+  startDate.value = date;
+  showStartPicker.value = false;
+}
+
+function onEndDateSelect(date: string) {
+  endDate.value = date;
+  showEndPicker.value = false;
 }
 
 function handleClose() {
   emit('close');
 }
 
+/** Every current field-validation problem, in plain language — checked synchronously, before any storage call. */
+function validate(): string[] {
+  const problems: string[] = [];
+  if (!code.value.trim()) problems.push(t('form.errorCodeRequired'));
+  if (!channel.value) problems.push(t('form.errorChannelRequired'));
+  if (!discountType.value) problems.push(t('form.errorDiscountTypeRequired'));
+  if (!value.value.trim()) problems.push(t('form.errorValueRequired'));
+  if (!startDate.value) problems.push(t('form.errorStartRequired'));
+  if (!endDate.value) problems.push(t('form.errorEndRequired'));
+  if (startDate.value && endDate.value && endDate.value < startDate.value) {
+    problems.push(t('form.errorEndBeforeStart'));
+  }
+  return problems;
+}
+
 async function save() {
   errorMessage.value = '';
+
+  const problems = validate();
+  if (problems.length) {
+    errorMessage.value = problems.join(' ');
+    return;
+  }
+
   saving.value = true;
   try {
     const usageLimitValue = usageLimit.value.trim() ? Number(usageLimit.value) : undefined;
-    await couponsStore.create({
+    const input = {
       code: code.value.trim(),
       channelKey: channel.value,
       discountType: discountType.value,
       value: value.value.trim(),
-      startDate: parseDisplayDate(startDate.value),
-      endDate: parseDisplayDate(endDate.value),
+      startDate: startDate.value,
+      endDate: endDate.value,
       usageLimit: usageLimitValue != null && !Number.isNaN(usageLimitValue) ? usageLimitValue : undefined,
       note: note.value.trim() || undefined
-    });
+    };
+
+    if (mode.value === 'edit' && props.coupon) {
+      await couponsStore.update(props.coupon.code, input);
+    } else {
+      await couponsStore.create(input);
+    }
     emit('close');
   } catch (error) {
-    console.error('Failed to save coupon', error);
-    errorMessage.value = t('form.saveError');
+    if (error instanceof DuplicateCouponCodeError) {
+      errorMessage.value = t('form.errorDuplicateCode');
+    } else {
+      console.error('Failed to save coupon', error);
+      errorMessage.value = t('form.saveError');
+    }
   } finally {
     saving.value = false;
   }
@@ -241,6 +313,18 @@ textarea {
 }
 .muted-input::placeholder {
   color: var(--ck-muted);
+}
+.date-input {
+  width: 100%;
+  font-size: 15px;
+  padding: 11px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--ck-rule);
+  background: var(--ck-card);
+  color: var(--ck-ink);
+  font-family: 'Inter', sans-serif;
+  text-align: left;
+  cursor: pointer;
 }
 textarea {
   font-family: 'Inter', sans-serif;

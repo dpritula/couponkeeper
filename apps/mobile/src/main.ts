@@ -5,6 +5,8 @@ import router from './router';
 import i18n from './i18n';
 import { useSettingsStore } from './stores/settings';
 import { seedDatabase } from './db/seed';
+import { bootstrapExpiryNotifications } from './notifications/bootstrap';
+import { recalculateExpiryNotifications } from './notifications/expiryNotifications';
 
 import { Capacitor } from '@capacitor/core';
 import { IonicVue } from '@ionic/vue';
@@ -89,4 +91,6 @@ Promise.all([
   router.isReady()
 ]).then(() => {
   app.mount('#app');
+  bootstrapExpiryNotifications(router);
+  recalculateExpiryNotifications().catch((error) => console.error('Failed to schedule expiry notifications', error));
 });

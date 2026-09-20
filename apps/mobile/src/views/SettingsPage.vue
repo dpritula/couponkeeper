@@ -1,7 +1,7 @@
 <template>
   <ion-page>
     <div class="app-header">
-      <div class="brand font-brand">{{ t('settings.title') }}</div>
+      <div class="brand font-brand"><AppLogo class="brand-logo" />{{ t('settings.title') }}</div>
     </div>
 
     <ion-content class="ion-padding">
@@ -31,6 +31,40 @@
             <option v-for="opt in sortOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
           </select>
         </ion-item>
+
+        <ion-item lines="none">
+          <ion-label>{{ t('settings.warnDaysBefore') }}</ion-label>
+        </ion-item>
+        <ion-item lines="none">
+          <div class="stepper">
+            <button
+              type="button"
+              class="stepper-btn"
+              :aria-label="t('settings.warnDaysBeforeDecrement')"
+              @click="decrementWarnDaysBefore"
+            >
+              −
+            </button>
+            <input
+              class="stepper-value"
+              type="number"
+              inputmode="numeric"
+              min="0"
+              max="20"
+              step="1"
+              :value="settings.warnDaysBefore"
+              @change="onWarnDaysBeforeInput"
+            />
+            <button
+              type="button"
+              class="stepper-btn"
+              :aria-label="t('settings.warnDaysBeforeIncrement')"
+              @click="incrementWarnDaysBefore"
+            >
+              +
+            </button>
+          </div>
+        </ion-item>
       </ion-list>
 
       <div class="disclaimer">
@@ -48,6 +82,7 @@
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { IonPage, IonContent, IonList, IonItem, IonLabel, IonSegment, IonSegmentButton } from '@ionic/vue';
+import AppLogo from '@/components/AppLogo.vue';
 import { useSettingsStore, type ThemeMode } from '@/stores/settings';
 import { getCouponSortOptions } from '@/utils/couponSort';
 
@@ -66,6 +101,25 @@ function onSortChange(event: Event) {
   const option = sortOptions.value.find((opt) => opt.value === value);
   if (option) settings.setDefaultSort(option.sortBy, option.sortDir);
 }
+
+function incrementWarnDaysBefore() {
+  settings.setWarnDaysBefore(settings.warnDaysBefore + 1);
+}
+
+function decrementWarnDaysBefore() {
+  settings.setWarnDaysBefore(settings.warnDaysBefore - 1);
+}
+
+function onWarnDaysBeforeInput(event: Event) {
+  const input = event.target as HTMLInputElement;
+  settings.setWarnDaysBefore(Number(input.value));
+  // The `:value` binding only re-patches the DOM when the bound number itself
+  // changes; if an out-of-range entry sanitizes back to whatever it already
+  // was (e.g. typing 99 while already at 2), Vue sees no change and leaves
+  // the invalid text sitting in the input. Force the field back in sync with
+  // the store explicitly so an out-of-range entry is always visibly corrected.
+  input.value = String(settings.warnDaysBefore);
+}
 </script>
 
 <style scoped>
@@ -82,9 +136,18 @@ function onSortChange(event: Event) {
   box-shadow: 0 2px 6px rgba(31, 42, 36, 0.08);
 }
 .brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 22px;
   font-weight: 600;
   color: var(--ck-ink);
+}
+.brand-logo {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  flex-shrink: 0;
 }
 .sort-select {
   width: 100%;
@@ -92,6 +155,43 @@ function onSortChange(event: Event) {
   font-size: 14px;
   font-weight: 500;
   padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--ck-card);
+  border: 1px solid var(--ck-rule);
+  color: var(--ck-ink);
+}
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.stepper-btn {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ck-rule);
+  background: transparent;
+  color: var(--ck-ink);
+  font-size: 18px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.stepper-btn:active {
+  background: var(--ck-sage-dim);
+  border-color: var(--ck-sage);
+  color: var(--ck-sage);
+}
+.stepper-value {
+  width: 56px;
+  text-align: center;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 6px;
   border-radius: 10px;
   background: var(--ck-card);
   border: 1px solid var(--ck-rule);
