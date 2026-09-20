@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CouponKeeper — Privacy Policy</title>
+<style>
+  :root {
+    --ck-ink: #1F2A24;
+    --ck-paper: #F3EFE4;
+    --ck-card: #FBF9F2;
+    --ck-sage: #4C7A5D;
+    --ck-rule: #D8D2C0;
+    --ck-muted: #6B6355;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ck-paper);
+    color: var(--ck-ink);
+    font-family: Georgia, 'Times New Roman', serif;
+    line-height: 1.6;
+  }
+  .wrap {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 48px 20px 96px;
+  }
+  h1 {
+    font-size: 2rem;
+    margin-bottom: 4px;
+  }
+  .meta {
+    color: var(--ck-muted);
+    font-family: -apple-system, Segoe UI, Arial, sans-serif;
+    font-size: 0.9rem;
+    margin-bottom: 32px;
+  }
+  h2 {
+    font-size: 1.25rem;
+    margin-top: 2.5rem;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--ck-rule);
+  }
+  p, li {
+    font-family: -apple-system, Segoe UI, Arial, sans-serif;
+    font-size: 1rem;
+  }
+  ul { padding-left: 1.2rem; }
+  a { color: var(--ck-sage); }
+  .card {
+    background: var(--ck-card);
+    border: 1px solid var(--ck-rule);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin: 24px 0;
+    font-family: -apple-system, Segoe UI, Arial, sans-serif;
+  }
+  .card strong { display: block; margin-bottom: 6px; }
+  footer {
+    margin-top: 3rem;
+    color: var(--ck-muted);
+    font-family: -apple-system, Segoe UI, Arial, sans-serif;
+    font-size: 0.85rem;
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Privacy Policy for CouponKeeper</h1>
+    <p class="meta">Effective date: September 20, 2026</p>
+
+    <div class="card">
+      <strong>In short:</strong>
+      CouponKeeper stores everything you enter — promo codes, channels, and your app
+      settings — only on your own device. The app has no account system, no backend
+      server, and does not send your data anywhere.
+    </div>
+
+    <h2>1. Who this applies to</h2>
+    <p>
+      This policy covers the CouponKeeper mobile app (Android; iOS is not yet published),
+      developed as an independent project. It explains what data the app handles and how.
+    </p>
+
+    <h2>2. What data the app stores, and where</h2>
+    <p>
+      CouponKeeper is a <strong>local-first</strong> app. The promo codes you create
+      (code, discount, validity dates, usage limit and count, an optional note, and the
+      sales channel you assign to it), the channels you define, and your app preferences
+      (theme, default sort order, and your expiry-reminder threshold) are stored in a
+      SQLite database <strong>on your device only</strong>.
+    </p>
+    <ul>
+      <li>No user account, sign-in, or registration exists in the app.</li>
+      <li>No data is uploaded to, or synced with, any server operated by the developer.</li>
+      <li>No data is shared with, or sold to, any third party.</li>
+      <li>The app contains no advertising and no third-party analytics or tracking SDKs.</li>
+    </ul>
+    <p>
+      Cloud backup / cross-device sync is not currently offered. If that changes in a
+      future version, this policy will be updated before the feature ships, and it will
+      be opt-in.
+    </p>
+
+    <h2>3. Permissions the app requests</h2>
+    <ul>
+      <li>
+        <strong>Notifications (POST_NOTIFICATIONS):</strong> used only to show local,
+        on-device reminders when a coupon you created is approaching its expiry date
+        (the threshold is configurable in Settings). These reminders are scheduled and
+        shown entirely by your device's operating system — nothing about your coupons is
+        transmitted anywhere to generate them, and you can deny or revoke this permission
+        at any time in your device's app settings without losing any other functionality.
+      </li>
+      <li>
+        <strong>Internet:</strong> included automatically by the underlying app framework
+        (Capacitor/Android) that CouponKeeper is built on. The app does not use it to send
+        or receive any of your data; nothing described in this policy relies on network
+        access.
+      </li>
+    </ul>
+
+    <h2>4. Data deletion</h2>
+    <p>
+      Because all data lives only on your device, you are always in full control of it:
+    </p>
+    <ul>
+      <li>Delete an individual coupon or channel at any time from within the app.</li>
+      <li>
+        Uninstalling the app, or clearing its storage from your device's app settings,
+        permanently deletes all of its data. Nothing persists anywhere else, since
+        nothing was ever sent anywhere else.
+      </li>
+    </ul>
+
+    <h2>5. Children's privacy</h2>
+    <p>
+      CouponKeeper is a general-audience productivity tool for makers and sellers
+      managing their own promotions, not directed at children, and it does not knowingly
+      collect any personal information from anyone, regardless of age — since it does not
+      collect personal information from anyone at all.
+    </p>
+
+    <h2>6. Changes to this policy</h2>
+    <p>
+      If this policy changes — for example, if an opt-in cloud backup feature is added in
+      the future — this page will be updated and the "Effective date" above will change
+      accordingly. Continued use of the app after an update constitutes acceptance of the
+      revised policy.
+    </p>
+
+    <h2>7. Contact</h2>
+    <p>
+      Questions or feedback about this policy or the app can be sent to:
+      <a href="mailto:couponkeeper.email@gmail.com">couponkeeper.email@gmail.com</a>
+    </p>
+
+    <footer>CouponKeeper — a local-first promo code tracker for makers and independent sellers.</footer>
+  </div>
+</body>
+</html>
