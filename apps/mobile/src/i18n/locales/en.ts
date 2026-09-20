@@ -24,6 +24,7 @@ export default {
     duplicateError: 'A channel with that name already exists.'
   },
   status: {
+    notStarted: 'Not Started',
     active: 'Active',
     soon: 'Expiring',
     expired: 'Expired'
@@ -31,6 +32,7 @@ export default {
   codes: {
     title: 'CouponKeeper',
     filterAll: 'All',
+    startsOn: 'starts {date}',
     until: 'until {date}',
     untilWithDays: 'until {date} · {days} days left',
     ended: 'ended {date}',
@@ -44,6 +46,7 @@ export default {
     deleteConfirm: 'Delete',
     deleteCancel: 'Cancel',
     detailClose: 'Close',
+    detailEdit: 'Edit code',
     detailChannel: 'Channel',
     detailStatus: 'Status',
     detailDiscountType: 'Discount type',
@@ -73,6 +76,7 @@ export default {
   },
   form: {
     newTitle: 'New promo code',
+    editTitle: 'Edit promo code',
     code: 'Code',
     generate: 'Generate',
     channel: 'Channel',
@@ -83,11 +87,20 @@ export default {
     value: 'Amount',
     start: 'Start',
     end: 'End',
+    datePlaceholder: 'Select date',
     usageLimit: 'Usage limit (optional)',
     usageLimitPlaceholder: 'unlimited',
     note: 'Note to self',
     save: 'Save code',
-    saveError: 'Could not save this code — check the fields and try again.'
+    saveError: 'Could not save this code — check the fields and try again.',
+    errorCodeRequired: 'Code is required.',
+    errorChannelRequired: 'Choose a channel.',
+    errorDiscountTypeRequired: 'Choose a discount type.',
+    errorValueRequired: 'Amount is required.',
+    errorStartRequired: 'Choose a start date.',
+    errorEndRequired: 'Choose an end date.',
+    errorEndBeforeStart: 'End date cannot be before the start date.',
+    errorDuplicateCode: 'This code is already used on this channel.'
   },
   calendar: {
     title: 'Calendar',
@@ -104,6 +117,18 @@ export default {
     themeLight: 'Light',
     themeDark: 'Dark',
     sortLabel: 'Default sort',
+    warnDaysBefore: 'Warn about coupon expiry',
+    warnDaysBeforeIncrement: 'Increase warning days',
+    warnDaysBeforeDecrement: 'Decrease warning days',
     feedback: 'We welcome your feedback, suggestions, feature requests, and bug reports at {email}.'
+  },
+  notifications: {
+    singleTitle: 'Coupon expiring soon',
+    singleBody: '{code} ({channel}) expires in {days} days',
+    singleBodyToday: '{code} ({channel}) expires today',
+    multiTitle: '{count} coupons expiring soon',
+    multiLine: '{code} ({channel}) — {days} days',
+    multiLineToday: '{code} ({channel}) — today',
+    showingFromNotification: 'Showing coupons from a notification'
   }
 }

@@ -4,7 +4,12 @@
     <div class="detail-card" role="dialog" aria-modal="true">
       <div class="detail-header">
         <div class="detail-code">{{ code.code }}</div>
-        <button type="button" class="detail-close" :aria-label="t('codes.detailClose')" @click="$emit('close')">×</button>
+        <div class="detail-header-actions">
+          <button type="button" class="detail-edit" :aria-label="t('codes.detailEdit')" @click="$emit('edit', code)">
+            <ion-icon :icon="pencil" />
+          </button>
+          <button type="button" class="detail-close" :aria-label="t('codes.detailClose')" @click="$emit('close')">×</button>
+        </div>
       </div>
 
       <div class="detail-body">
@@ -65,11 +70,13 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { IonIcon } from '@ionic/vue';
+import { pencil } from 'ionicons/icons';
 import type { PromoCode } from '@/data/promoCode';
 import { formatFullDate } from '@/utils/date';
 
 const props = defineProps<{ code: PromoCode | null }>();
-defineEmits<{ close: [] }>();
+defineEmits<{ close: []; edit: [PromoCode] }>();
 const { t } = useI18n();
 
 const discountTypeLabel = computed(() => {
@@ -118,6 +125,28 @@ const discountTypeLabel = computed(() => {
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--ck-ink);
+}
+.detail-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.detail-edit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  font-size: 16px;
+  color: var(--ck-sage);
+  background: var(--ck-sage-dim);
+  border: none;
+  cursor: pointer;
+}
+.detail-edit:active {
+  background: var(--ck-sage);
+  color: #fff;
 }
 .detail-close {
   font-size: 20px;
@@ -171,6 +200,10 @@ const discountTypeLabel = computed(() => {
   font-weight: 600;
   padding: 3px 9px;
   border-radius: 100px;
+}
+.badge-notStarted {
+  background: var(--ck-rule);
+  color: var(--ck-muted);
 }
 .badge-active {
   background: var(--ck-sage-dim);

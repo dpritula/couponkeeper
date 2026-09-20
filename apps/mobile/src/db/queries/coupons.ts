@@ -3,6 +3,7 @@ import { db } from '../client'
 import { channels, couponChannels, coupons, type ChannelRow, type CouponRow } from '../schema'
 import { daysUntilEnd, deriveCouponStatus } from '../status'
 import { getChannelByKey } from './channels'
+import { useSettingsStore } from '@/stores/settings'
 
 /**
  * `expiringSoon` and `daysLeft` aren't backed by a sortable SQL column (see
@@ -46,6 +47,8 @@ export interface CouponListFilter {
   channelKey?: string
   /** Case-insensitive substring match on the code. */
   search?: string
+  /** A coupon matches if its code is any of these — used to show exactly the coupons named on a tapped notification (see notifications/). */
+  codes?: string[]
 }
 
 export interface CouponListOptions {
@@ -64,6 +67,7 @@ export async function listCoupons(options: CouponListOptions = {}): Promise<Coup
   if (filter?.status?.length) conditions.push(inArray(coupons.status, filter.status))
   if (filter?.discountType?.length) conditions.push(inArray(coupons.discountType, filter.discountType))
   if (filter?.search) conditions.push(like(coupons.code, `%${filter.search}%`))
+  if (filter?.codes?.length) conditions.push(inArray(coupons.code, filter.codes))
 
   if (filter?.channelKey) {
     const matchingIds = await db
@@ -129,6 +133,32 @@ export async function getCouponByCode(code: string): Promise<CouponWithChannels 
   return result
 }
 
+/** Thrown by `createCoupon`/`updateCoupon` when another coupon already has the same code on the same channel. */
+export class DuplicateCouponCodeError extends Error {
+  constructor(code: string) {
+    super(`A coupon with code "${code}" already exists on this channel`)
+    this.name = 'DuplicateCouponCodeError'
+  }
+}
+
+/**
+ * Whether some *other* coupon already has `code` on the channel identified by
+ * `channelKey`. `coupons` has no `channel_id` column (channel is a many-to-many
+ * join, see schema.ts), so this is a join rather than a single-table lookup —
+ * there is deliberately no DB-level unique index for it (see
+ * openspec/changes/edit-coupon-and-validation/design.md Decision 3).
+ */
+async function codeExistsOnChannel(code: string, channelKey: string, excludeCouponId?: number): Promise<boolean> {
+  const rows = await db
+    .select({ couponId: coupons.id })
+    .from(coupons)
+    .innerJoin(couponChannels, eq(couponChannels.couponId, coupons.id))
+    .innerJoin(channels, eq(channels.id, couponChannels.channelId))
+    .where(and(eq(coupons.code, code), eq(channels.key, channelKey)))
+
+  return rows.some((row) => row.couponId !== excludeCouponId)
+}
+
 /**
  * Attaches each coupon's channels via a plain join instead of Drizzle's
  * relational query API: that API aggregates nested relations with SQLite's
@@ -157,8 +187,9 @@ async function attachChannels(couponRows: CouponRow[]): Promise<CouponWithChanne
     channelsByCouponId.set(row.couponId, list)
   }
 
+  const soonThresholdDays = useSettingsStore().warnDaysBefore
   return couponRows.map((coupon) => {
-    const { status, daysLeft } = deriveCouponStatus(coupon.endDate)
+    const { status, daysLeft } = deriveCouponStatus(coupon.startDate, coupon.endDate, soonThresholdDays)
     return {
       ...coupon,
       status,
@@ -183,7 +214,11 @@ export interface NewCouponInput {
 
 /** Inserts a coupon (+ its channel join row) from form input; status/daysLeft are derived from the dates, not taken from the caller. */
 export async function createCoupon(input: NewCouponInput): Promise<CouponWithChannels> {
-  const { status, daysLeft } = deriveCouponStatus(input.endDate)
+  if (await codeExistsOnChannel(input.code, input.channelKey)) {
+    throw new DuplicateCouponCodeError(input.code)
+  }
+
+  const { status, daysLeft } = deriveCouponStatus(input.startDate, input.endDate, useSettingsStore().warnDaysBefore)
 
   await db.insert(coupons).values({
     code: input.code,
@@ -204,6 +239,50 @@ export async function createCoupon(input: NewCouponInput): Promise<CouponWithCha
   const channel = await getChannelByKey(input.channelKey)
   if (!channel) throw new Error(`Unknown channel key "${input.channelKey}"`)
   await db.insert(couponChannels).values({ couponId: created.id, channelId: channel.id })
+
+  return (await getCouponByCode(input.code))!
+}
+
+/**
+ * Updates an existing coupon (looked up by its *current* code) with new form
+ * input, including a possibly-changed code. `usageCount` and `id` are left
+ * untouched — they aren't form fields — and status/daysLeft are re-derived
+ * from the (possibly new) dates, exactly as `createCoupon` does. The coupon's
+ * single channel join row is replaced rather than diffed, since the form only
+ * ever picks one channel.
+ */
+export async function updateCoupon(currentCode: string, input: NewCouponInput): Promise<CouponWithChannels> {
+  const [existing] = await db.select({ id: coupons.id }).from(coupons).where(eq(coupons.code, currentCode))
+  if (!existing) throw new Error(`No coupon found with code "${currentCode}"`)
+
+  if (await codeExistsOnChannel(input.code, input.channelKey, existing.id)) {
+    throw new DuplicateCouponCodeError(input.code)
+  }
+
+  const { status, daysLeft } = deriveCouponStatus(input.startDate, input.endDate, useSettingsStore().warnDaysBefore)
+
+  await db
+    .update(coupons)
+    .set({
+      code: input.code,
+      discountType: input.discountType,
+      value: input.value,
+      startDate: input.startDate,
+      endDate: input.endDate,
+      // `?? null` (not left `undefined`) so clearing usage limit/note while
+      // editing actually clears the stored value, rather than an update
+      // silently leaving a previous value in place.
+      usageLimit: input.usageLimit ?? null,
+      note: input.note ?? null,
+      daysLeft,
+      status
+    })
+    .where(eq(coupons.id, existing.id))
+
+  const channel = await getChannelByKey(input.channelKey)
+  if (!channel) throw new Error(`Unknown channel key "${input.channelKey}"`)
+  await db.delete(couponChannels).where(eq(couponChannels.couponId, existing.id))
+  await db.insert(couponChannels).values({ couponId: existing.id, channelId: channel.id })
 
   return (await getCouponByCode(input.code))!
 }

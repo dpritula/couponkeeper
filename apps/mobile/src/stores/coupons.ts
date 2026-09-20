@@ -3,6 +3,7 @@ import {
   createCoupon,
   deleteCoupon,
   listCoupons,
+  updateCoupon,
   type CouponSortField,
   type CouponWithChannels,
   type NewCouponInput,
@@ -11,6 +12,7 @@ import {
 import type { CouponRow } from '@/db/schema'
 import type { PromoCode } from '@/data/promoCode'
 import { useSettingsStore } from '@/stores/settings'
+import { recalculateExpiryNotifications } from '@/notifications/expiryNotifications'
 
 function toggleInArray<T>(items: T[], value: T): T[] {
   return items.includes(value) ? items.filter((item) => item !== value) : [...items, value]
@@ -51,7 +53,15 @@ export const useCouponsStore = defineStore('coupons', {
     channelFilter: 'all' as 'all' | string,
     statusFilter: [] as CouponRow['status'][],
     discountTypeFilter: [] as CouponRow['discountType'][],
-    loading: false
+    loading: false,
+    /**
+     * Transient — set when `items` currently shows exactly the coupons named
+     * on a tapped multi-coupon expiry notification, rather than the maker's
+     * own channel/status/discount-type filters. Not persisted; see
+     * notifications/ and design.md's "separate, transient 'notification
+     * view'" decision.
+     */
+    notificationCodes: null as string[] | null
   }),
   getters: {
     /**
@@ -99,10 +109,33 @@ export const useCouponsStore = defineStore('coupons', {
     async create(input: NewCouponInput) {
       await createCoupon(input)
       await this.load()
+      void recalculateExpiryNotifications()
+    },
+    async update(currentCode: string, input: NewCouponInput) {
+      await updateCoupon(currentCode, input)
+      await this.load()
+      void recalculateExpiryNotifications()
     },
     async remove(code: string) {
       await deleteCoupon(code)
       this.items = this.items.filter((item) => item.code !== code)
+      void recalculateExpiryNotifications()
+    },
+    /** Shows exactly `codes`, bypassing the normal channel/status/discount-type filters without changing them. */
+    async showNotificationCoupons(codes: string[]) {
+      this.notificationCodes = codes
+      this.loading = true
+      try {
+        const rows = await listCoupons({ sortBy: this.sortBy, sortDir: this.sortDir, filter: { codes } })
+        this.items = rows.map(toViewModel)
+      } finally {
+        this.loading = false
+      }
+    },
+    /** Returns to the maker's own filters, exactly as before the notification tap. */
+    async clearNotificationCoupons() {
+      this.notificationCodes = null
+      await this.load()
     }
   }
 })

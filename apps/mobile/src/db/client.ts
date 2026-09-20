@@ -1,7 +1,8 @@
 import { Capacitor } from '@capacitor/core'
 import { CapacitorSQLite, SQLiteConnection, type SQLiteDBConnection } from '@capacitor-community/sqlite'
 import { drizzle } from 'drizzle-orm/sqlite-proxy'
-import migrationSql from './migrations/0000_elite_snowbird.sql?raw'
+import migration0000 from './migrations/0000_elite_snowbird.sql?raw'
+import migration0001 from './migrations/0001_naive_meggan.sql?raw'
 import * as schema from './schema'
 
 const DB_NAME = 'couponkeeper'
@@ -26,10 +27,17 @@ async function ensureWebStore(): Promise<void> {
 
 /**
  * There's no migration runner wired up yet (see CLAUDE.md's Testing/OpenSpec
- * notes on the stack still being bootstrapped) — this just applies the single
- * generated migration once, guarded by whether `coupons` already exists.
+ * notes on the stack still being bootstrapped) — a fresh db just applies
+ * every generated migration in order, guarded by whether `coupons` already
+ * exists. For a db that already has `coupons` (from before migration 0001
+ * existed), there's no applied-migration tracking to detect that 0001 is
+ * still missing, so it's detected directly instead: 0001 drops the
+ * `coupons_code_unique` index (see schema.ts — coupon-code uniqueness is now
+ * scoped to code+channel, checked in queries/coupons.ts, not a plain DB
+ * index), so a db where that index still exists predates 0001 and needs it
+ * applied now, on top of whatever it already has.
  *
- * Statements are split and run one at a time rather than handing the whole
+ * Statements are split and run one at a time rather than handing a whole
  * multi-statement file to a single `conn.execute()` call: on native Android,
  * the plugin's own statement splitter garbles it — verified on-device, it
  * concatenates a `CREATE INDEX` with the following `CREATE TABLE` into one
@@ -39,9 +47,24 @@ async function ensureWebStore(): Promise<void> {
  * one statement per `execute()` call sidesteps that splitter entirely.
  */
 async function ensureSchema(conn: SQLiteDBConnection): Promise<void> {
-  const { values } = await conn.query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'coupons'")
-  if (values && values.length > 0) return
+  const { values: couponsTable } = await conn.query(
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'coupons'"
+  )
+  if (!couponsTable || couponsTable.length === 0) {
+    await runMigration(conn, migration0000)
+    await runMigration(conn, migration0001)
+    return
+  }
 
+  const { values: staleUniqueIndex } = await conn.query(
+    "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'coupons_code_unique'"
+  )
+  if (staleUniqueIndex && staleUniqueIndex.length > 0) {
+    await runMigration(conn, migration0001)
+  }
+}
+
+async function runMigration(conn: SQLiteDBConnection, migrationSql: string): Promise<void> {
   const statements = migrationSql
     .split('--> statement-breakpoint')
     .map((statement) => statement.trim())

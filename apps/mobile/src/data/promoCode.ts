@@ -1,5 +1,5 @@
 export type DiscountType = 'percent' | 'amount' | 'shipping'
-export type CodeStatus = 'active' | 'soon' | 'expired'
+export type CodeStatus = 'notStarted' | 'active' | 'soon' | 'expired'
 
 /** A channel as resolved for display — `undefined` if the coupon's only channel was since deleted. */
 export interface PromoCodeChannel {

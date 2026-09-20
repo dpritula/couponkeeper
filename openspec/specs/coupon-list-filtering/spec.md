@@ -41,7 +41,7 @@ The "Expiring Soon" sort SHALL order all non-expired coupons (active or expiring
 - **THEN** under "Expiring Soon" sort (either direction) the non-expired coupon is still listed before the expired one
 
 ### Requirement: Coupon list can be filtered by status
-The coupon list SHALL offer a status filter with the values Active, Expiring, and Expired, allowing more than one value to be selected at once. A coupon SHALL be shown if its status matches any of the selected values. When no status value is selected, coupons of every status SHALL be shown.
+The coupon list SHALL offer a status filter with the values Not Started, Active, Expiring, and Expired, allowing more than one value to be selected at once. A coupon SHALL be shown if its status matches any of the selected values. When no status value is selected, coupons of every status SHALL be shown.
 
 #### Scenario: Filtering by a single status
 - **WHEN** the user selects only "Expiring"
@@ -51,9 +51,13 @@ The coupon list SHALL offer a status filter with the values Active, Expiring, an
 - **WHEN** the user selects both "Active" and "Expiring"
 - **THEN** coupons with either status are shown, and expired coupons are hidden
 
+#### Scenario: Filtering by "Not Started"
+- **WHEN** the user selects only "Not Started"
+- **THEN** only coupons whose start date is after today are shown
+
 #### Scenario: No status selected shows every status
 - **WHEN** no status value is selected
-- **THEN** coupons of all statuses are shown, subject to any other active filters
+- **THEN** coupons of all statuses, including "Not Started," are shown, subject to any other active filters
 
 ### Requirement: Coupon list can be filtered by discount type
 The coupon list SHALL offer a discount-type filter with the values Percent, Amount, and Shipping, allowing more than one value to be selected at once. A coupon SHALL be shown if its discount type matches any of the selected values. When no discount-type value is selected, coupons of every discount type SHALL be shown.
