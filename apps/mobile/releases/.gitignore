@@ -1,0 +1,7 @@
+# This folder is an explicit whitelist: ignore everything by default,
+# then un-ignore only the tracked release artifact(s) below.
+# (apps/mobile/android/.gitignore has a blanket `*.apk` rule, but that
+# only applies inside android/ — this folder is deliberately outside it.)
+*
+!.gitignore
+!app-debug.apk
