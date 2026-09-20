@@ -41,6 +41,9 @@ defineEmits<{ delete: []; select: [] }>();
 const { t } = useI18n();
 
 const dateLabel = computed(() => {
+  if (props.code.status === 'notStarted') {
+    return t('codes.startsOn', { date: formatShortDate(props.code.startDate) });
+  }
   const date = formatShortDate(props.code.endDate);
   if (props.code.status === 'expired') return t('codes.ended', { date });
   if (props.code.status === 'soon' && props.code.daysLeft != null) {
@@ -107,6 +110,10 @@ const detailLabel = computed(() => {
 }
 .delete-btn:active {
   color: var(--ck-sienna);
+}
+.badge-notStarted {
+  background: var(--ck-rule);
+  color: var(--ck-muted);
 }
 .badge-active {
   background: var(--ck-sage-dim);

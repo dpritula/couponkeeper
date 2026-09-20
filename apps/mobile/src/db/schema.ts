@@ -43,7 +43,7 @@ export const coupons = sqliteTable(
      * from the dates instead of trusting stored values (see CLAUDE.md).
      */
     daysLeft: integer('days_left'),
-    status: text('status', { enum: ['active', 'soon', 'expired'] }).notNull(),
+    status: text('status', { enum: ['notStarted', 'active', 'soon', 'expired'] }).notNull(),
     createdAt: text('created_at')
       .notNull()
       .default(sql`(current_timestamp)`),
@@ -52,7 +52,14 @@ export const coupons = sqliteTable(
       .default(sql`(current_timestamp)`)
   },
   (table) => [
-    uniqueIndex('coupons_code_unique').on(table.code),
+    /**
+     * No unique index on `code` alone: uniqueness is scoped to code+channel
+     * (a code may repeat across different channels), which isn't expressible
+     * as a single-table index since channel lives in the `coupon_channels`
+     * join table — enforced instead by `codeExistsOnChannel` in
+     * `queries/coupons.ts` (see openspec/changes/edit-coupon-and-validation/design.md).
+     */
+    index('coupons_code_idx').on(table.code),
     index('coupons_status_idx').on(table.status),
     index('coupons_end_date_idx').on(table.endDate),
     index('coupons_discount_type_idx').on(table.discountType)

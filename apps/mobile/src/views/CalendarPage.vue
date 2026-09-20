@@ -1,8 +1,8 @@
 <template>
   <ion-page>
-    <ion-content :fullscreen="true">
+    <div class="cal-header">
       <div class="cal-head">
-        <div class="brand2 font-brand">{{ t('calendar.title') }}</div>
+        <div class="brand2 font-brand"><AppLogo class="brand-logo" />{{ t('calendar.title') }}</div>
         <div class="cal-nav">
           <button type="button" class="nav-arrow" :aria-label="t('calendar.prevMonth')" @click="goToPrevMonth">‹</button>
           <button type="button" class="nav-label" @click="showPicker = true">{{ monthLabel }}</button>
@@ -35,7 +35,9 @@
           <span class="dot" :style="{ background: ch.color }"></span>{{ ch.name }}
         </div>
       </div>
+    </div>
 
+    <ion-content>
       <div class="cal-day-list">
         <div class="heading">{{ t('calendar.activeOn', { date: selectedDateLabel }) }}</div>
         <CouponFilterToolbar
@@ -55,7 +57,8 @@
     </ion-content>
 
     <MonthYearPickerModal :open="showPicker" :visible-month="visibleMonth" @select="onPickerSelect" @close="showPicker = false" />
-    <CouponDetailModal :code="selectedCode" @close="selectedCode = null" />
+    <CouponDetailModal :code="selectedCode" @close="selectedCode = null" @edit="startEdit" />
+    <CouponFormModal :key="editingCode?.code ?? 'closed'" :open="editingCode !== null" :coupon="editingCode" @close="closeForm" />
   </ion-page>
 </template>
 
@@ -63,9 +66,11 @@
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { IonPage, IonContent, onIonViewWillEnter } from '@ionic/vue';
+import AppLogo from '@/components/AppLogo.vue';
 import CodeCard from '@/components/CodeCard.vue';
 import CouponDetailModal from '@/components/CouponDetailModal.vue';
 import CouponFilterToolbar from '@/components/CouponFilterToolbar.vue';
+import CouponFormModal from '@/components/CouponFormModal.vue';
 import MonthYearPickerModal from '@/components/MonthYearPickerModal.vue';
 import { listCoupons, type CouponSortField, type SortDirection } from '@/db/queries/coupons';
 import type { CouponRow } from '@/db/schema';
@@ -102,6 +107,7 @@ const selectedDate = ref(todayIsoDate());
 const today = ref(todayIsoDate());
 const showPicker = ref(false);
 const selectedCode = ref<PromoCode | null>(null);
+const editingCode = ref<PromoCode | null>(null);
 const coupons = ref<PromoCode[]>([]);
 
 // Local to Calendar's own day-list toolbar — never written into
@@ -172,17 +178,50 @@ function onDayListSortChange({ sortBy, sortDir }: { sortBy: CouponSortField; sor
   settingsStore.setDefaultSort(sortBy, sortDir);
 }
 
+async function loadCoupons() {
+  coupons.value = (await listCoupons({ sortBy: 'daysLeft', sortDir: 'desc' })).map(toViewModel);
+}
+
+function startEdit(code: PromoCode) {
+  selectedCode.value = null;
+  editingCode.value = code;
+}
+
+// The form saves through `useCouponsStore`, which only refreshes its own
+// `items` (what CodesPage reads) — Calendar keeps its own local `coupons`
+// list (design.md's Calendar decision), so it has to reload it itself once
+// the form closes, rather than relying on a page-lifecycle hook that won't
+// re-fire for a same-page popup close.
+async function closeForm() {
+  editingCode.value = null;
+  await loadCoupons();
+}
+
 onIonViewWillEnter(async () => {
   today.value = todayIsoDate();
   channelsStore.load();
-  coupons.value = (await listCoupons({ sortBy: 'daysLeft', sortDir: 'desc' })).map(toViewModel);
+  await loadCoupons();
 });
 </script>
 
 <style scoped>
+.cal-header {
+  /* A page-level sibling of <ion-content>, not inside it — same fixed-header
+     pattern as CodesPage's/SettingsPage's `.app-header` (ion-page lays its
+     children out as a column, ion-content is the only one that scrolls), so
+     the month grid + channel legend stay in place while the day list below
+     scrolls independently. Nothing accounts for the status bar / notch on
+     its own here (see `.cal-head`'s own top padding), and the border+shadow
+     visually separate it from the scrolling list, same as the other two
+     screens' headers. */
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  background: var(--ck-paper);
+  border-bottom: 1px solid var(--ck-rule);
+  box-shadow: 0 2px 6px rgba(31, 42, 36, 0.08);
+}
 .cal-head {
-  /* Custom in-content header (no <ion-header>), so nothing accounts for the
-     status bar / notch on its own — add the safe area inset explicitly. */
   padding: calc(env(safe-area-inset-top) + 6px) 20px 6px;
   display: flex;
   align-items: center;
@@ -191,9 +230,18 @@ onIonViewWillEnter(async () => {
 .brand2 {
   /* Matches CodesPage's/SettingsPage's `.brand` size — the three screens'
      headers are meant to look identical in weight/scale (see CLAUDE.md). */
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 22px;
   font-weight: 600;
   color: var(--ck-ink);
+}
+.brand-logo {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  flex-shrink: 0;
 }
 .cal-nav {
   display: flex;
@@ -257,16 +305,18 @@ onIonViewWillEnter(async () => {
   color: var(--ck-ink);
   border-radius: 0;
   /* An outline, not a border: outline is drawn after layout and never
-     affects the box's padding edge, so (a) .sel toggling its color can never
-     shift the absolutely-positioned .chan-lines inside this cell, and
+     affects the box's padding edge, so (a) .sel toggling its color/width can
+     never shift the absolutely-positioned .chan-lines inside this cell, and
      (b) .chan-lines' left:0/right:0 still reach the cell's true visual edge
-     on every cell (selected or not), keeping same-colored lines in adjacent
-     cells flush against each other. A reserved *border* (the previous
-     approach) fixed (a) but broke (b) — it insets the padding edge on every
-     cell, not just the selected one, opening a gap between every pair of
-     adjacent cells' lines. */
-  outline: 1.5px solid transparent;
-  outline-offset: -1.5px;
+     on every cell, so same-colored lines in adjacent cells still meet up
+     across the thin rule line rather than gapping unevenly. A reserved
+     *border* (an earlier approach) fixed (a) but broke (b) — it insets the
+     padding edge on every cell, not just the selected one, opening an uneven
+     gap between every pair of adjacent cells' lines. Every cell now carries a
+     visible (not transparent) hairline outline by default, so the grid reads
+     as ruled day-by-day. */
+  outline: 1px solid var(--ck-rule);
+  outline-offset: -1px;
   position: relative;
   cursor: pointer;
 }
@@ -276,7 +326,7 @@ onIonViewWillEnter(async () => {
 .cal-days .day.today {
   /* A solid sage fill (darker/more saturated than the pale `--ck-sage-dim`
      tint used previously) so "today" reads clearly against the grid even
-     next to a selected day's lighter outline. `--ck-card` gives readable
+     next to a selected day's darker outline. `--ck-card` gives readable
      contrast on top of it in both palettes (light: dark-ish text on a
      mid-tone green; dark: dark text on the brighter dark-palette sage). */
   background: var(--ck-sage);
@@ -284,11 +334,22 @@ onIonViewWillEnter(async () => {
   font-weight: 600;
 }
 .cal-days .day.sel {
-  /* `--ck-rule` — the app's standard border/divider token — rather than
-     `--ck-muted`: a visibly lighter ring than before, still distinguishable
-     from a plain cell's border-less edge in both palettes. */
-  outline-color: var(--ck-rule);
+  /* Selected day needs to stand out from the plain hairline grid, not just
+     from a plain cell's outline color — a thicker, high-contrast `--ck-ink`
+     outline plus a `--ck-sage-dim` background fill, rather than the earlier
+     `--ck-rule` outline-only treatment, which was barely distinguishable
+     from the grid lines themselves once every cell got a visible outline. */
+  outline: 2px solid var(--ck-ink);
+  outline-offset: -2px;
+  background: var(--ck-sage-dim);
   font-weight: 600;
+}
+.cal-days .day.today.sel {
+  /* Higher-specificity override so a selected "today" keeps its solid sage
+     fill (rather than being replaced by .sel's paler background) while still
+     picking up the bolder selection outline. */
+  background: var(--ck-sage);
+  outline-color: var(--ck-ink);
 }
 .chan-lines {
   position: absolute;
@@ -309,12 +370,10 @@ onIonViewWillEnter(async () => {
 .cal-legend {
   display: flex;
   gap: 14px;
-  padding: 14px 20px 10px;
+  padding: 4px 20px 10px;
   font-family: 'Inter', sans-serif;
   font-size: 11px;
   color: var(--ck-muted);
-  border-top: 1px solid var(--ck-rule);
-  margin-top: 10px;
   flex-wrap: wrap;
 }
 .cal-legend .item {

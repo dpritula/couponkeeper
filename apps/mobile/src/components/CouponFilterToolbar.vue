@@ -66,6 +66,7 @@ const { t } = useI18n();
 const sortOptions = computed(() => getCouponSortOptions());
 
 const statusOptions: { value: CouponRow['status']; label: string }[] = [
+  { value: 'notStarted', label: t('status.notStarted') },
   { value: 'active', label: t('status.active') },
   { value: 'soon', label: t('status.soon') },
   { value: 'expired', label: t('status.expired') }
