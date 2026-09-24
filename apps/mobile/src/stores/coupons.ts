@@ -49,8 +49,8 @@ export function toViewModel(coupon: CouponWithChannels): PromoCode {
 export const useCouponsStore = defineStore('coupons', {
   state: () => ({
     items: [] as PromoCode[],
-    /** A channel `key`, or 'all' for no channel restriction. */
-    channelFilter: 'all' as 'all' | string,
+    /** The set of explicitly selected channel keys; empty means "All" (no restriction) — see utils/channelSelection.ts. */
+    channelFilter: new Set<string>() as Set<string>,
     statusFilter: [] as CouponRow['status'][],
     discountTypeFilter: [] as CouponRow['discountType'][],
     loading: false,
@@ -80,7 +80,7 @@ export const useCouponsStore = defineStore('coupons', {
           sortBy: this.sortBy,
           sortDir: this.sortDir,
           filter: {
-            channelKey: this.channelFilter === 'all' ? undefined : this.channelFilter,
+            channelKeys: this.channelFilter.size === 0 ? undefined : [...this.channelFilter],
             status: this.statusFilter,
             discountType: this.discountTypeFilter
           }
@@ -90,8 +90,9 @@ export const useCouponsStore = defineStore('coupons', {
         this.loading = false
       }
     },
-    async setChannelFilter(filter: 'all' | string) {
-      this.channelFilter = filter
+    /** Takes the already-resolved next selection (see utils/channelSelection.ts's `toggleChannelSelection`) — the store itself doesn't own the toggle-and-collapse-to-"All" rule, matching how it's shared with Calendar's own channel filter. */
+    async setChannelFilter(next: Set<string>) {
+      this.channelFilter = next
       await this.load()
     },
     async toggleStatusFilter(status: CouponRow['status']) {

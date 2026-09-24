@@ -14,7 +14,7 @@ placeholder copy pasted from a template.
 | `listing/full-description.txt` | Full description (1773/4000 chars) |
 | `graphics/icon-512.png` | High-res store icon, 512×512 — copied from the app's own `icon-source/ic_launcher-playstore.png` |
 | `graphics/feature-graphic-1024x500.png` | Feature graphic banner, generated from the app's real icon + brand colors/fonts |
-| `graphics/screenshots/01–05-*.png` | The 5 screenshots already in `docs/screenshots/` (used in the GitHub README), re-exported at a 2:1 max aspect ratio so Play's upload validator accepts them, with transparency flattened onto the app's own paper background |
+| `graphics/screenshots/01–05-*.png` | The 5 screenshots (Codes, Calendar, detail and Settings retaken after the multi-select channel-filter change) already in `docs/screenshots/` (used in the GitHub README), re-exported at a 2:1 max aspect ratio so Play's upload validator accepts them, with transparency flattened onto the app's own paper background |
 | `data-safety-worksheet.md` | Exact answers for Play Console's "Data safety" questionnaire, with reasoning |
 | `content-rating-worksheet.md` | Exact answers for the IARC content rating questionnaire |
 | `../../../docs/privacy-policy.html` | The required public Privacy Policy page (repo root `docs/`, for GitHub Pages — see step 2) |

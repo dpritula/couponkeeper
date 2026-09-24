@@ -30,11 +30,13 @@
         </div>
       </div>
 
-      <div class="cal-legend">
-        <div v-for="ch in channelsStore.items" :key="ch.key" class="item">
-          <span class="dot" :style="{ background: ch.color }"></span>{{ ch.name }}
-        </div>
-      </div>
+      <ChannelFilterChips
+        class="cal-channel-filter"
+        :channels="channelsStore.items"
+        :selected="dayListSelectedChannels"
+        @toggle="toggleDayListChannel"
+        @select-all="enableAllDayListChannels"
+      />
     </div>
 
     <ion-content>
@@ -42,12 +44,11 @@
         <div class="heading">{{ t('calendar.activeOn', { date: selectedDateLabel }) }}</div>
         <CouponFilterToolbar
           :channels="channelsStore.items"
-          :channel-filter="dayListChannelFilter"
+          :show-channel-filter="false"
           :status-filter="dayListStatusFilter"
           :discount-type-filter="dayListDiscountTypeFilter"
           :sort-by="dayListSortBy"
           :sort-dir="dayListSortDir"
-          @update:channel-filter="dayListChannelFilter = $event"
           @toggle-status="toggleDayListStatus"
           @toggle-discount="toggleDayListDiscountType"
           @update:sort="onDayListSortChange"
@@ -67,6 +68,7 @@ import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { IonPage, IonContent, onIonViewWillEnter } from '@ionic/vue';
 import AppLogo from '@/components/AppLogo.vue';
+import ChannelFilterChips from '@/components/ChannelFilterChips.vue';
 import CodeCard from '@/components/CodeCard.vue';
 import CouponDetailModal from '@/components/CouponDetailModal.vue';
 import CouponFilterToolbar from '@/components/CouponFilterToolbar.vue';
@@ -90,6 +92,7 @@ import {
   type CalendarDayCell,
   type VisibleMonth
 } from '@/utils/calendar';
+import { resolveSelectedChannelKeys, toggleChannelSelection } from '@/utils/channelSelection';
 import { formatShortDate } from '@/utils/date';
 
 function toggleInArray<T>(items: T[], value: T): T[] {
@@ -116,21 +119,40 @@ const coupons = ref<PromoCode[]>([]);
 // is the exception: it's the shared, persisted default from the settings
 // store, so changing it here also updates Codes and the Settings screen
 // (design.md's Calendar decision).
-const dayListChannelFilter = ref<string>('all');
+//
+// Channel visibility is a positive whitelist of explicitly *selected*
+// channel keys, empty by default — the same "empty selection means no
+// restriction" convention dayListStatusFilter/dayListDiscountTypeFilter
+// below already use. "All" is shown as active exactly when this set is
+// empty; selecting a channel deselects "All"; deselecting the only
+// selected channel reverts to "All" automatically, since the set becomes
+// empty again (calendar-channel-line-filter's design.md Decisions 1, 2, 6).
+const dayListSelectedChannels = ref<Set<string>>(new Set());
 const dayListStatusFilter = ref<CouponRow['status'][]>([]);
 const dayListDiscountTypeFilter = ref<CouponRow['discountType'][]>([]);
 const dayListSortBy = computed(() => settingsStore.defaultSort.sortBy);
 const dayListSortDir = computed(() => settingsStore.defaultSort.sortDir);
 
+// Resolves the whitelist into the concrete set every consumer below needs:
+// every current channel when nothing is explicitly selected, or just the
+// selected ones (design.md Decision 3).
+const enabledChannelKeys = computed(() =>
+  resolveSelectedChannelKeys(
+    dayListSelectedChannels.value,
+    channelsStore.items.map((channel) => channel.key)
+  )
+);
+
 const monthGrid = computed(() => getMonthGrid(visibleMonth.value));
-// Marks/legend always derive from the full, unfiltered coupon set — the
-// day-list toolbar below narrows only `selectedDayCoupons` (design.md
-// Decision 7 / specs/calendar-view/spec.md's "Selected-day list filter and sort").
-const dayChannelLines = computed(() => getDayChannelLines(monthGrid.value, coupons.value, channelsStore.items));
+// Both the grid's lines and the day list below are narrowed by the same
+// channel visibility filter (calendar-channel-line-filter's design.md
+// Decision 3); status/discount-type filters below the day-list heading
+// still affect only `selectedDayCoupons`.
+const dayChannelLines = computed(() => getDayChannelLines(monthGrid.value, coupons.value, channelsStore.items, enabledChannelKeys.value));
 const selectedDayCoupons = computed(() => {
   const dateFiltered = getCouponsForDate(coupons.value, selectedDate.value);
   const filtered = filterDayListCoupons(dateFiltered, {
-    channelFilter: dayListChannelFilter.value,
+    channelFilter: enabledChannelKeys.value,
     statusFilter: dayListStatusFilter.value,
     discountTypeFilter: dayListDiscountTypeFilter.value
   });
@@ -164,6 +186,14 @@ function selectDay(cell: CalendarDayCell) {
 function onPickerSelect(value: VisibleMonth) {
   visibleMonth.value = value;
   showPicker.value = false;
+}
+
+function toggleDayListChannel(key: string) {
+  dayListSelectedChannels.value = toggleChannelSelection(dayListSelectedChannels.value, key, channelsStore.items.length);
+}
+
+function enableAllDayListChannels() {
+  dayListSelectedChannels.value = new Set();
 }
 
 function toggleDayListStatus(status: CouponRow['status']) {
@@ -209,8 +239,8 @@ onIonViewWillEnter(async () => {
   /* A page-level sibling of <ion-content>, not inside it — same fixed-header
      pattern as CodesPage's/SettingsPage's `.app-header` (ion-page lays its
      children out as a column, ion-content is the only one that scrolls), so
-     the month grid + channel legend stay in place while the day list below
-     scrolls independently. Nothing accounts for the status bar / notch on
+     the month grid + channel visibility filter stay in place while the day
+     list below scrolls independently. Nothing accounts for the status bar / notch on
      its own here (see `.cal-head`'s own top padding), and the border+shadow
      visually separate it from the scrolling list, same as the other two
      screens' headers. */
@@ -367,25 +397,11 @@ onIonViewWillEnter(async () => {
      sits flush against this one, reading as one continuous bar across the
      row (design.md Decision 3b). */
 }
-.cal-legend {
-  display: flex;
-  gap: 14px;
+.cal-channel-filter {
+  /* Chip markup/CSS itself lives in ChannelFilterChips.vue (shared with
+     Codes' channel filter, see calendar-channel-line-filter's design.md
+     Decision 8) — this class only positions it under the grid. */
   padding: 4px 20px 10px;
-  font-family: 'Inter', sans-serif;
-  font-size: 11px;
-  color: var(--ck-muted);
-  flex-wrap: wrap;
-}
-.cal-legend .item {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-.dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
 }
 .cal-day-list {
   padding: 2px 16px 20px;
