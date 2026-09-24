@@ -2,7 +2,7 @@ import { LocalNotifications } from '@capacitor/local-notifications'
 import { listCoupons, type CouponWithChannels } from '@/db/queries/coupons'
 import { daysUntilEnd } from '@/db/status'
 import { useSettingsStore } from '@/stores/settings'
-import { getTodayState, saveTodayState } from './todayState'
+import { dateKey, getFutureSchedule, getTodayState, saveFutureSchedule, saveTodayState, type FutureSchedule } from './todayState'
 import i18n from '@/i18n'
 
 /**
@@ -66,6 +66,47 @@ async function runUntilSettled(): Promise<void> {
 
 async function doRecalculate(): Promise<void> {
   const futureIds = futureOffsets().map((offset) => PENDING_ID + offset)
+
+  /**
+   * A real, confirmed bug: a future-offset alarm (`19001`-`19020`) fires on
+   * its own schedule whether or not the app ever runs again before its
+   * target date arrives — that's the whole point of pre-scheduling them
+   * (see design.md's reboot-resilience note). If the app isn't opened at
+   * all between the day a coupon enters the "tomorrow" bucket and the day
+   * that alarm actually fires, `todayState` never learns a delivery
+   * happened, because it's only ever mutated from `handleToday`'s own
+   * scheduling calls below — never from a future-offset alarm maturing on
+   * its own. The first recalculation to run afterwards (typically
+   * triggered by tapping that very notification) would then see an empty
+   * `deliveredCodes`/`pendingCodes` for today, treat the coupon as
+   * brand-new, and immediately fire an identical duplicate a couple of
+   * seconds later via the catch-up path — exactly what a maker reported.
+   *
+   * Fixed by checking, before the unconditional cancel below removes it,
+   * whether the specific id that used to target *today* (as of the last
+   * recalculation, read from `getFutureSchedule()`) is still pending. Not
+   * pending means it already fired, so its codes are handed to
+   * `handleToday` as already-covered rather than newly-qualifying.
+   * Deliberately id-specific, not just "is `now` past noon": the OS's
+   * inexact alarms (`isExactNotification: false`) can be delayed well past
+   * their nominal time, so a coupon whose alarm genuinely hasn't fired yet
+   * must still go through the normal catch-up path, not be silently
+   * swallowed by this check. This can still misfire once, rarely: an OS
+   * reboot clears pending alarms without firing them, which would also
+   * make the id "not pending" here despite nothing having been delivered
+   * — but that's already an accepted, documented gap (see design.md's
+   * Risks — "a small UX gap, not a correctness bug"), and confirmed daily
+   * duplicates are worse than that rare miss.
+   */
+  const previousFutureSchedule = getFutureSchedule()
+  const todayFutureEntry = previousFutureSchedule[dateKey()]
+  let firedWithoutRecalc: string[] = []
+  if (todayFutureEntry) {
+    const { notifications: pending } = await LocalNotifications.getPending()
+    const stillPending = pending.some((notification) => notification.id === todayFutureEntry.id)
+    if (!stillPending) firedWithoutRecalc = todayFutureEntry.codes
+  }
+
   await LocalNotifications.cancel({ notifications: futureIds.map((id) => ({ id })) })
 
   const granted = await ensurePermission()
@@ -75,16 +116,18 @@ async function doRecalculate(): Promise<void> {
   const rows = await listCoupons()
   const buckets = bucketByOffset(rows, warnDaysBefore)
 
+  const nextFutureSchedule: FutureSchedule = {}
   for (const offset of futureOffsets()) {
     if (offset > warnDaysBefore) break
     const bucket = buckets.get(offset)
     if (!bucket?.length) continue
-    await LocalNotifications.schedule({
-      notifications: [buildNotification(PENDING_ID + offset, bucket, dateAtNoon(offset))]
-    })
+    const id = PENDING_ID + offset
+    nextFutureSchedule[dateKey(dateAtNoon(offset))] = { id, codes: bucket.map((entry) => entry.coupon.code) }
+    await LocalNotifications.schedule({ notifications: [buildNotification(id, bucket, dateAtNoon(offset))] })
   }
+  saveFutureSchedule(nextFutureSchedule)
 
-  await handleToday(buckets.get(0) ?? [])
+  await handleToday(buckets.get(0) ?? [], firedWithoutRecalc)
 }
 
 function futureOffsets(): number[] {
@@ -163,7 +206,7 @@ function dateAtNoon(offsetDays: number, now: Date = new Date()): Date {
  * so each new batch of not-yet-covered coupons is delivered immediately
  * under its own fresh id and locked right away.
  */
-async function handleToday(bucket: BucketEntry[]): Promise<void> {
+async function handleToday(bucket: BucketEntry[], firedWithoutRecalc: string[] = []): Promise<void> {
   const now = new Date()
   const noonToday = dateAtNoon(0, now)
   const state = getTodayState(now)
@@ -172,6 +215,13 @@ async function handleToday(bucket: BucketEntry[]): Promise<void> {
     state.deliveredCodes.push(...state.pendingCodes)
     state.pendingCodes = []
     state.pendingAt = null
+  }
+
+  if (firedWithoutRecalc.length > 0) {
+    const alreadyClaimed = new Set([...state.deliveredCodes, ...state.pendingCodes])
+    for (const code of firedWithoutRecalc) {
+      if (!alreadyClaimed.has(code)) state.deliveredCodes.push(code)
+    }
   }
 
   const byCode = new Map(bucket.map((entry) => [entry.coupon.code, entry]))
