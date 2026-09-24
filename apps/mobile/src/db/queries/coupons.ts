@@ -43,8 +43,8 @@ export interface CouponListFilter {
   status?: CouponRow['status'][]
   /** A coupon matches if its discount type is any of these; omit/empty means no restriction. */
   discountType?: CouponRow['discountType'][]
-  /** Channel `key` (e.g. 'etsy'), not the DB id. */
-  channelKey?: string
+  /** A coupon matches if it has a channel whose `key` is any of these (e.g. 'etsy'), not the DB id; omit/empty means no restriction. */
+  channelKeys?: string[]
   /** Case-insensitive substring match on the code. */
   search?: string
   /** A coupon matches if its code is any of these — used to show exactly the coupons named on a tapped notification (see notifications/). */
@@ -69,13 +69,13 @@ export async function listCoupons(options: CouponListOptions = {}): Promise<Coup
   if (filter?.search) conditions.push(like(coupons.code, `%${filter.search}%`))
   if (filter?.codes?.length) conditions.push(inArray(coupons.code, filter.codes))
 
-  if (filter?.channelKey) {
+  if (filter?.channelKeys?.length) {
     const matchingIds = await db
       .select({ id: coupons.id })
       .from(coupons)
       .innerJoin(couponChannels, eq(couponChannels.couponId, coupons.id))
       .innerJoin(channels, eq(channels.id, couponChannels.channelId))
-      .where(eq(channels.key, filter.channelKey))
+      .where(inArray(channels.key, filter.channelKeys))
 
     if (matchingIds.length === 0) return []
     conditions.push(

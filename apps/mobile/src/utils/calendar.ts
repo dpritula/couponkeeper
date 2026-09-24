@@ -102,25 +102,30 @@ function activeChannelKeysOn(date: string, coupons: PromoCode[]): Set<string> {
 
 /**
  * Per day (keyed by its ISO date), an ordered array of "slots" to render as
- * indicator lines — one slot per distinct channel that has at least one
- * active coupon on *any* day within that day's calendar week (row), ordered
- * the same way `channels` is ordered (its callers already pass it sorted by
- * `sortOrder`, matching the legend/filter/management order elsewhere in the
- * app). A slot holds that channel's color on a day it has an active coupon,
- * or `null` on a day within the same week it doesn't — so a channel's line
- * stays at the same stacking position across its whole week, instead of the
- * remaining lines shifting up to fill the gap the moment that channel's
- * coupon ends partway through the week. `days` is grouped into consecutive
- * chunks of 7 (as `getMonthGrid` produces) to determine each week's channel
- * set independently. A day with no active coupon on it (i.e. every slot
- * would be `null`) has no entry in the returned map, same as before. A
- * coupon contributes only its own resolved `channel` (a coupon with no
- * channel — its only channel was deleted — contributes nothing).
+ * indicator lines — one slot per distinct channel that is currently enabled
+ * by `enabledChannelKeys` and has at least one active coupon on *any* day
+ * within that day's calendar week (row), ordered the same way `channels` is
+ * ordered (its callers already pass it sorted by `sortOrder`, matching the
+ * filter/management order elsewhere in the app). A slot holds that channel's
+ * color on a day it has an active coupon, or `null` on a day within the same
+ * week it doesn't — so a channel's line stays at the same stacking position
+ * across its whole week, instead of the remaining lines shifting up to fill
+ * the gap the moment that channel's coupon ends partway through the week.
+ * `days` is grouped into consecutive chunks of 7 (as `getMonthGrid`
+ * produces) to determine each week's channel set independently. A channel
+ * absent from `enabledChannelKeys` is excluded from that computation
+ * entirely (not merely blanked), so enabled channels' lines shift up to fill
+ * the position it would otherwise have reserved. A day with no active
+ * coupon on it, or whose only active coupons belong to disabled channels,
+ * has no entry in the returned map. A coupon contributes only its own
+ * resolved `channel` (a coupon with no channel — its only channel was
+ * deleted — contributes nothing).
  */
 export function getDayChannelLines(
   days: CalendarDayCell[],
   coupons: PromoCode[],
-  channels: ChannelRow[]
+  channels: ChannelRow[],
+  enabledChannelKeys: Set<string>
 ): Map<string, (string | null)[]> {
   const result = new Map<string, (string | null)[]>()
 
@@ -131,7 +136,7 @@ export function getDayChannelLines(
     for (const day of week) {
       for (const key of activeChannelKeysOn(day.date, coupons)) weekActiveKeys.add(key)
     }
-    const weekChannelOrder = channels.filter((channel) => weekActiveKeys.has(channel.key))
+    const weekChannelOrder = channels.filter((channel) => weekActiveKeys.has(channel.key) && enabledChannelKeys.has(channel.key))
     if (weekChannelOrder.length === 0) continue
 
     for (const day of week) {
@@ -158,8 +163,8 @@ export function getCouponsForDate(coupons: PromoCode[], selectedDate: string): P
 }
 
 export interface DayListFilters {
-  /** A channel `key`, or 'all' for no channel restriction. */
-  channelFilter: string
+  /** The set of currently channel-visibility-filter-enabled channel `key`s (see calendar-view's "Channel visibility filter" requirement). A coupon with no channel is never excluded by this filter, regardless of this set's contents. */
+  channelFilter: Set<string>
   statusFilter: CouponRow['status'][]
   discountTypeFilter: CouponRow['discountType'][]
 }
@@ -167,13 +172,15 @@ export interface DayListFilters {
 /**
  * Narrows a coupon list by the same channel/status/discount-type combination
  * rule `coupon-list-filtering` specifies for the Codes list (AND across the
- * three filter types, OR within each multi-select one; an empty/'all' value
- * means no restriction on that dimension) — reused here for Calendar's own
- * day-list toolbar (design.md Decision 7).
+ * three filter types, OR within each multi-select one) — reused here for
+ * Calendar's own day-list toolbar (design.md Decision 7), with the channel
+ * dimension driven by the multi-select channel visibility filter instead of
+ * the Codes list's single-select one (see calendar-channel-line-filter's
+ * design.md Decision 4).
  */
 export function filterDayListCoupons(coupons: PromoCode[], filters: DayListFilters): PromoCode[] {
   return coupons.filter((coupon) => {
-    if (filters.channelFilter !== 'all' && coupon.channel?.key !== filters.channelFilter) return false
+    if (coupon.channel !== undefined && !filters.channelFilter.has(coupon.channel.key)) return false
     if (filters.statusFilter.length && !filters.statusFilter.includes(coupon.status)) return false
     if (filters.discountTypeFilter.length && !filters.discountTypeFilter.includes(coupon.discountType)) return false
     return true

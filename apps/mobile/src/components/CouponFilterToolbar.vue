@@ -1,19 +1,13 @@
 <template>
-  <div class="chip-row">
-    <div class="chips">
-      <button class="chip" :class="{ on: channelFilter === 'all' }" @click="$emit('update:channelFilter', 'all')">
-        {{ t('codes.filterAll') }}
-      </button>
-      <button
-        v-for="channel in channels"
-        :key="channel.key"
-        class="chip"
-        :class="{ on: channelFilter === channel.key }"
-        @click="$emit('update:channelFilter', channel.key)"
-      >
-        {{ channel.name }}
-      </button>
-    </div>
+  <div v-if="showChannelFilter" class="chip-row">
+    <ChannelFilterChips
+      class="chips"
+      :channels="channels"
+      :selected="channelFilter"
+      :wrap="false"
+      @toggle="$emit('toggle-channel', $event)"
+      @select-all="$emit('select-all-channels')"
+    />
     <slot name="channel-extra" />
   </div>
 
@@ -47,19 +41,25 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
+import ChannelFilterChips from '@/components/ChannelFilterChips.vue';
 import type { CouponSortField, SortDirection } from '@/db/queries/coupons';
 import type { ChannelRow, CouponRow } from '@/db/schema';
 import { getCouponSortOptions } from '@/utils/couponSort';
 
-const props = defineProps<{
-  channels: ChannelRow[];
-  /** A channel `key`, or 'all' for no channel restriction. */
-  channelFilter: string;
-  statusFilter: CouponRow['status'][];
-  discountTypeFilter: CouponRow['discountType'][];
-  sortBy: CouponSortField;
-  sortDir: SortDirection;
-}>();
+const props = withDefaults(
+  defineProps<{
+    channels: ChannelRow[];
+    /** The set of explicitly selected channel keys; empty means "All". Unused when `showChannelFilter` is false. */
+    channelFilter?: Set<string>;
+    statusFilter: CouponRow['status'][];
+    discountTypeFilter: CouponRow['discountType'][];
+    sortBy: CouponSortField;
+    sortDir: SortDirection;
+    /** Whether to render the channel-filter row. False for Calendar's usage, which filters by channel elsewhere (see calendar-channel-line-filter). */
+    showChannelFilter?: boolean;
+  }>(),
+  { showChannelFilter: true, channelFilter: () => new Set<string>() }
+);
 
 const { t } = useI18n();
 
@@ -81,7 +81,8 @@ const discountOptions: { value: CouponRow['discountType']; label: string }[] = [
 const sortValue = computed(() => `${props.sortBy}:${props.sortDir}`);
 
 const emit = defineEmits<{
-  'update:channelFilter': [string];
+  'toggle-channel': [string];
+  'select-all-channels': [];
   'toggle-status': [CouponRow['status']];
   'toggle-discount': [CouponRow['discountType']];
   'update:sort': [{ sortBy: CouponSortField; sortDir: SortDirection }];
@@ -101,28 +102,13 @@ function onSortChange(event: Event) {
   gap: 10px;
 }
 .chips {
-  display: flex;
-  gap: 6px;
-  overflow-x: auto;
+  /* Merges onto ChannelFilterChips' own root element (its chip markup/CSS
+     lives there, shared with Calendar's channel filter — see
+     calendar-channel-line-filter's design.md Decision 8); `:wrap="false"`
+     on it handles the actual horizontal-scroll-vs-wrap behavior, this just
+     lets it shrink to share the row with the manage-channels button. */
   flex: 1;
   min-width: 0;
-}
-.chip {
-  font-family: 'Inter', sans-serif;
-  font-size: 12px;
-  font-weight: 500;
-  padding: 6px 13px;
-  border-radius: 100px;
-  background: var(--ck-card);
-  border: 1px solid var(--ck-rule);
-  white-space: nowrap;
-  color: var(--ck-muted);
-  flex-shrink: 0;
-}
-.chip.on {
-  background: var(--ck-sage);
-  border-color: var(--ck-sage);
-  color: #fff;
 }
 .toolbar {
   display: flex;

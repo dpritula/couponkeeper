@@ -1,61 +1,4 @@
-# calendar-view Specification
-
-## Purpose
-
-Gives makers a real, navigable month calendar over their actual coupons and channels, so they can see at a glance which days have active promo codes, jump to any month, and inspect what's running on a specific day.
-
-## Requirements
-
-### Requirement: Month navigation
-The Calendar screen SHALL display a visible month (starting with the device's current month) with controls to move to the previous or next month. Activating either control SHALL immediately re-render the day grid for the newly visible month and update the displayed month/year label to match.
-
-#### Scenario: Advancing to the next month
-- **WHEN** the maker activates the "next month" control
-- **THEN** the day grid re-renders for the following month and the label shows that month and year
-
-#### Scenario: Returning to the previous month
-- **WHEN** the maker activates the "previous month" control
-- **THEN** the day grid re-renders for the preceding month and the label shows that month and year
-
-### Requirement: Month/year picker
-Activating the month/year label SHALL open a popup for choosing any year and month directly. Confirming a choice SHALL set the visible month to the chosen year/month, update the label and day grid accordingly, and close the popup. Dismissing the popup without choosing SHALL leave the visible month unchanged.
-
-#### Scenario: Jumping to a specific month and year
-- **WHEN** the maker opens the month/year picker and selects a year and month, distinct from the currently visible one
-- **THEN** the popup closes, the label shows the selected month and year, and the day grid shows that month
-
-#### Scenario: Dismissing the picker without a selection
-- **WHEN** the maker opens the month/year picker and dismisses it without selecting a month/year
-- **THEN** the visible month, label, and day grid remain unchanged
-
-### Requirement: Day selection
-Each day cell in the grid, including a dimmed leading or trailing day belonging to an adjacent month, SHALL be selectable. Selecting a day SHALL make it the selected date; selecting a leading/trailing day SHALL also move the visible month to that day's month.
-
-#### Scenario: Selecting a day within the visible month
-- **WHEN** the maker taps a day cell that belongs to the currently visible month
-- **THEN** that day becomes the selected date and the coupon list below updates for it
-
-#### Scenario: Selecting a dimmed day from an adjacent month
-- **WHEN** the maker taps a dimmed day cell belonging to the previous or next month
-- **THEN** the visible month changes to that day's month, the grid re-renders for it, and that day becomes the selected date
-
-### Requirement: Default selected date
-On first showing the Calendar screen, the selected date SHALL default to the device's actual current date, and the coupon list SHALL reflect coupons active on that date.
-
-#### Scenario: Opening the Calendar screen for the first time
-- **WHEN** the maker opens the Calendar screen
-- **THEN** today's date is shown as selected and the coupon list below shows every coupon whose date range includes today
-
-### Requirement: Selected-day visual indicator
-The selected day's cell SHALL be visually distinguished by a solid black border, independent of whether that day is also the device's current date.
-
-#### Scenario: A non-today day is selected
-- **WHEN** the selected date is not the device's current date
-- **THEN** the selected day's cell shows a solid black border
-
-#### Scenario: Today is the selected day
-- **WHEN** the selected date is the device's current date
-- **THEN** the day's cell still visually communicates it is selected
+## MODIFIED Requirements
 
 ### Requirement: Per-day channel indicator lines
 Each day in the grid SHALL show, inset a small amount from the top of its cell, one thin horizontal line per distinct channel that (a) is currently shown by the channel visibility filter below the grid, and (b) has at least one coupon whose date range (start date through end date, inclusive) includes that day, colored with that channel's stored color. Lines SHALL be stacked vertically with a small gap between each, ordered the same way channels are ordered elsewhere in the app (the channel filter, the channel management list). Within a single calendar week (row) of the grid, every currently-shown channel with at least one active coupon on any day of that week SHALL occupy the same stacking position on every day of that row — a day where that channel has no active coupon SHALL leave that position blank rather than the remaining channels' lines shifting to fill it. A channel not currently shown by the filter SHALL be excluded entirely from a week's stacking order (not merely left blank), so shown channels' lines shift to fill the position it would otherwise have reserved. A day with no coupon active on it at all, or whose only active coupons belong to channels not currently shown, SHALL show no lines. Changing the channel visibility filter SHALL immediately re-render every affected day's lines, without requiring any other action.
@@ -85,28 +28,6 @@ Each day in the grid SHALL show, inset a small amount from the top of its cell, 
 - **WHEN** the maker activates "All" after having one or more specific channels selected
 - **THEN** every channel's lines reappear on the days their coupons are active, immediately, without any other action
 
-### Requirement: Selected-day coupon list
-The list below the grid SHALL show every coupon whose date range (start date through end date, inclusive) includes the selected date, headed by a label naming the selected date. If no coupon's range includes the selected date, the list SHALL be empty.
-
-#### Scenario: Selected date falls within a coupon's range
-- **WHEN** the selected date is on or after a coupon's start date and on or before its end date
-- **THEN** that coupon appears in the list below the grid
-
-#### Scenario: Selected date falls outside every coupon's range
-- **WHEN** no coupon's date range includes the selected date
-- **THEN** the list below the grid shows no coupons
-
-### Requirement: Default list order
-The selected-day coupon list SHALL be ordered using the same shared, persisted default sort value used by the Codes list and the Settings screen (see the coupon-list-filtering capability), rather than a fixed value of its own. That shared default's initial factory value is days-left descending, so before it has ever been changed, coupons further from expiring lead and already-expired coupons fall to the end.
-
-#### Scenario: Selected day has both soon-to-expire and long-running coupons
-- **WHEN** the selected day's coupon list contains coupons with different amounts of time left before their end date, and the shared default sort has never been changed from its factory value
-- **THEN** the list is ordered with more days remaining first and fewer days remaining (including already-expired coupons) last
-
-#### Scenario: Shared default was changed elsewhere before Calendar is opened
-- **WHEN** the maker previously changed the shared default sort — via the Codes list or the Settings screen — to "Alphabetical" ascending, and then opens the Calendar screen for a day whose list has never had its own sort changed
-- **THEN** the selected-day list is ordered "Alphabetical" ascending, not days-left descending
-
 ### Requirement: Selected-day list filter and sort
 The Calendar screen SHALL offer, below the selected-day heading, a multi-select status filter, a multi-select discount-type filter, and a sort control (field and direction) — the same three controls the Codes list offers, minus its channel filter, which for Calendar lives instead in the channel visibility filter below the grid (see that requirement). Changing any of these controls, or the channel visibility filter above, SHALL immediately update the selected-day list to match, without requiring any other action. The channel visibility filter SHALL affect both the selected-day list and the month grid's channel indicator lines, unlike the status and discount-type filters below the heading, which SHALL affect only the selected-day list. The sort control is the shared, persisted default described in the coupon-list-filtering capability: changing it here SHALL also update the sort shown and applied on the Codes list and the Settings screen.
 
@@ -124,20 +45,7 @@ The Calendar screen SHALL offer, below the selected-day heading, a multi-select 
 - **WHEN** the maker has one or more specific channels selected in the channel visibility filter, together with one or more selected status or discount-type filter values below the heading
 - **THEN** the selected-day list shows only coupons on a currently-shown channel and matching at least one selected status (if any) and at least one selected discount type (if any), same as the Codes list's combination rule
 
-### Requirement: Read-only coupon cards on Calendar
-Each coupon in the selected-day list SHALL be shown using the same card presentation used on the Codes list, without any delete affordance. Activating a card SHALL open the same detail popup the Codes list uses, showing that coupon's full details, including the same edit control the Codes list's detail popup offers.
-
-#### Scenario: Viewing a coupon's card on Calendar
-- **WHEN** a coupon appears in the Calendar's selected-day list
-- **THEN** its card shows no delete control
-
-#### Scenario: Opening a coupon's detail from Calendar
-- **WHEN** the maker activates a coupon's card in the Calendar's selected-day list
-- **THEN** a detail popup opens showing that coupon's full properties, with no delete action available, but with the same edit control available as on the Codes list
-
-#### Scenario: Editing a coupon from Calendar
-- **WHEN** the maker activates the edit control in a coupon's detail popup opened from the Calendar screen
-- **THEN** the same coupon form used on the Codes list opens, pre-filled with that coupon's data, and saving updates the coupon the same way it would from Codes
+## ADDED Requirements
 
 ### Requirement: Channel visibility filter
 Below the month grid, in the position the read-only channel legend previously occupied, the Calendar screen SHALL offer an interactive, multi-select channel filter: one toggle control per channel in the maker's current channel list (showing that channel's name and color), each independently selectable, plus an "All" control. This filter SHALL determine both which channels' indicator lines appear on the month grid (see "Per-day channel indicator lines") and which coupons appear in the selected-day list below (see "Selected-day list filter and sort") — it is the same filter driving both, not two independent ones.
@@ -177,3 +85,9 @@ Below the month grid, in the position the read-only channel legend previously oc
 - **WHEN** the maker selects each of the maker's channels one at a time, until every one of them is selected
 - **THEN** "All" becomes shown as active and every specific channel control becomes shown as not active, the same as if the maker had activated "All" directly
 - **AND** the grid and the selected-day list show every channel's lines and coupons, unchanged from what they already showed with every channel individually selected
+
+## REMOVED Requirements
+
+### Requirement: Channel legend reflects real channels
+**Reason**: Replaced by the "Channel visibility filter" requirement, which occupies the same position below the grid but is interactive (a multi-select filter with an "All" shortcut) rather than a read-only list, and now also governs which channels' lines the grid shows.
+**Migration**: No data migration needed. The read-only legend markup is replaced by the new filter chips; the channel data it reads (name, color, live channel list) is unchanged.
