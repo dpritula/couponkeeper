@@ -1,4 +1,5 @@
 const STORAGE_KEY = 'couponkeeper.expiryNotificationToday'
+const FUTURE_STORAGE_KEY = 'couponkeeper.expiryNotificationFutureSchedule'
 
 /**
  * Per-coupon, not per-day: a coupon already covered by a delivered (or
@@ -27,7 +28,7 @@ interface TodayState {
 }
 
 /** Local-date key (`YYYY-MM-DD`), not UTC — matches how the rest of the app reasons about "today" (see db/status.ts). */
-function todayKey(now: Date = new Date()): string {
+export function dateKey(now: Date = new Date()): string {
   const year = now.getFullYear()
   const month = String(now.getMonth() + 1).padStart(2, '0')
   const day = String(now.getDate()).padStart(2, '0')
@@ -44,7 +45,7 @@ const EMPTY_STATE = (key: string): TodayState => ({
 
 /** Resets automatically once the stored date is no longer today — see design.md's "persisted 'today' state" decision. */
 export function getTodayState(now: Date = new Date()): TodayState {
-  const key = todayKey(now)
+  const key = dateKey(now)
   const raw = localStorage.getItem(STORAGE_KEY)
   if (!raw) return EMPTY_STATE(key)
   try {
@@ -69,4 +70,38 @@ export function saveTodayState(state: TodayState): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
 }
 
-export type { TodayState }
+/**
+ * What the *previous* recalculation scheduled under each still-future
+ * offset id (`19001`-`19020`), keyed by the actual calendar date each one
+ * targets rather than by its offset number — the offset a given date maps
+ * to shifts by one every day, but the date itself (and the id that alarm
+ * was scheduled under) doesn't change once set. Unlike `TodayState`, this
+ * does *not* reset daily: it's read once at the top of a recalculation,
+ * before that same call fully overwrites it with the freshly rebuilt
+ * `1..20` window, so a recalculation can tell whether *today* used to be
+ * one of those future offsets as of the last time the app ran — see
+ * `expiryNotifications.ts`'s `doRecalculate` for why that matters (a real,
+ * confirmed duplicate-notification bug).
+ */
+interface FutureScheduleEntry {
+  id: number
+  codes: string[]
+}
+type FutureSchedule = Record<string, FutureScheduleEntry>
+
+export function getFutureSchedule(): FutureSchedule {
+  const raw = localStorage.getItem(FUTURE_STORAGE_KEY)
+  if (!raw) return {}
+  try {
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' ? (parsed as FutureSchedule) : {}
+  } catch {
+    return {}
+  }
+}
+
+export function saveFutureSchedule(schedule: FutureSchedule): void {
+  localStorage.setItem(FUTURE_STORAGE_KEY, JSON.stringify(schedule))
+}
+
+export type { TodayState, FutureScheduleEntry, FutureSchedule }

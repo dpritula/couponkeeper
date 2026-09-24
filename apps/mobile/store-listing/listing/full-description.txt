@@ -4,8 +4,8 @@ WHAT YOU CAN DO
 • Log every promo code with its discount (percent, fixed amount, or free shipping), validity window, and an optional usage limit
 • See each code's status at a glance — Not Started, Active, Expiring Soon, or Expired — calculated automatically from its dates
 • Assign codes to the channel they belong to — your own site, Etsy, Instagram, or any channel you name and color yourself
-• Filter and sort your list by channel, status, discount type, or days remaining
-• Browse a monthly calendar with a colored indicator line for every day a code is active, so you can plan campaigns around what's already running
+• Filter your list by one or several channels at once, plus status and discount type, and sort by days remaining, dates, or usage
+• Browse a monthly calendar with a colored indicator line for every day a code is active, and narrow the calendar to just the channels you care about, so you can plan campaigns around what's already running
 • Get an optional local reminder before a code expires, so nothing quietly lapses
 • Attach a short note to any code — an audience, a campaign name, whatever helps you remember why it exists
 

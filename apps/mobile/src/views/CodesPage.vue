@@ -9,7 +9,8 @@
         :discount-type-filter="couponsStore.discountTypeFilter"
         :sort-by="couponsStore.sortBy"
         :sort-dir="couponsStore.sortDir"
-        @update:channel-filter="couponsStore.setChannelFilter($event)"
+        @toggle-channel="toggleChannelFilter"
+        @select-all-channels="selectAllChannels"
         @toggle-status="couponsStore.toggleStatusFilter($event)"
         @toggle-discount="couponsStore.toggleDiscountTypeFilter($event)"
         @update:sort="couponsStore.setSort($event.sortBy, $event.sortDir)"
@@ -93,6 +94,7 @@ import type { PromoCode } from '@/data/promoCode';
 import { getCouponByCode } from '@/db/queries/coupons';
 import { useChannelsStore } from '@/stores/channels';
 import { toViewModel, useCouponsStore } from '@/stores/coupons';
+import { toggleChannelSelection } from '@/utils/channelSelection';
 
 const { t } = useI18n();
 const route = useRoute();
@@ -163,6 +165,18 @@ async function handleNotificationQuery() {
     if (codes.length) await couponsStore.showNotificationCoupons(codes);
     await router.replace({ path: '/tabs/codes' });
   }
+}
+
+// The toggle-and-collapse-to-"All" rule lives in the shared util, not the
+// store, so it stays identical to Calendar's own channel filter (see
+// calendar-channel-line-filter's design.md Decision 8) — the store just
+// takes the already-resolved next selection.
+function toggleChannelFilter(key: string) {
+  couponsStore.setChannelFilter(toggleChannelSelection(couponsStore.channelFilter, key, channelsStore.items.length));
+}
+
+function selectAllChannels() {
+  couponsStore.setChannelFilter(new Set());
 }
 
 function requestDelete(code: string) {

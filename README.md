@@ -11,7 +11,7 @@ A maker running promotions across several sales channels (their own site, Etsy, 
 | Codes | Calendar | Settings |
 |---|---|---|
 | ![Codes list](docs/screenshots/codes.png) | ![Calendar month view](docs/screenshots/calendar.png) | ![Settings](docs/screenshots/settings.png) |
-| The main tab: every coupon as a card with its channel, discount value, validity, and usage, plus channel chips and a sort/status/discount-type filter toolbar above the list. | A monthly grid with a per-channel indicator line under each day a coupon is active, navigable by arrow or a month/year picker, with the same filter toolbar driving a list of coupons active on the selected day below it. | Theme (system/light/dark), the default sort order shared with Codes and Calendar, an expiry-warning threshold, and a feedback contact link. |
+| The main tab: every coupon as a card with its channel, discount value, validity, and usage, plus a multi-select channel filter ("All" by default; pick one or several channels) and a sort/status/discount-type toolbar above the list. | A monthly grid with a per-channel indicator line under each day a coupon is active, navigable by arrow or a month/year picker. The channel filter under the grid works exactly like the one on Codes and drives both the grid lines and the list of coupons active on the selected day; status, discount-type and sort controls sit under that list's heading. | Theme (system/light/dark), the default sort order shared with Codes and Calendar, an expiry-warning threshold, and a feedback contact link. |
 
 | Add a coupon | Coupon detail |
 |---|---|
@@ -37,8 +37,10 @@ The app is **local-first**: on launch it works entirely offline as an on-device 
 Data model, in brief: a **coupon** (promo code) has a code, discount type and value, a validity window (start/end date), an optional usage limit, and a status derived from those dates rather than trusted from storage (`notStarted` / `active` / `soon` / `expired`). A coupon can belong to multiple **channels** — user-managed entities (name + color), not a fixed enum — via a many-to-many join table. Status derivation, the schema, and the query layer live under `apps/mobile/src/db/`.
 
 Two screens beyond the coupon list round out the app:
-- **Calendar** — a real monthly grid with per-day, per-channel indicator lines, month/year navigation, and a filterable/sortable list of coupons active on the selected day.
+- **Calendar** — a real monthly grid with per-day, per-channel indicator lines, month/year navigation, and a filterable/sortable list of coupons active on the selected day. Its channel filter is multi-select and narrows both the indicator lines and the list.
 - **Settings** — theme (light/dark/system), a default sort order shared across Codes and Calendar, and a feedback contact link.
+
+The **channel filter** is the same on Codes and Calendar: an "All" chip (active by default) plus one chip per channel. Selecting a channel deselects "All" and shows only the selected channel(s); further selections add to that set; deselecting the last one — or selecting every channel individually — returns to "All". Both screens share one component (`ChannelFilterChips`) and one pure toggle function (`utils/channelSelection.ts`) so they cannot drift apart; Codes applies it as a SQL `IN` filter, Calendar in memory.
 
 All overlays (coupon creation, coupon detail, delete confirmation, channel management, month/year picker) are custom-styled popups sharing one structural pattern, not `ion-alert`/`ion-modal`, teleported to `<body>` to avoid Ionic's page-transition transform quirks affecting `position: fixed` content.
 
@@ -53,10 +55,10 @@ couponkeeper/
 │  │  ├─ android/    # Native Android project, committed to git
 │  │  └─ src/
 │  │     ├─ views/       # CodesPage, CalendarPage, SettingsPage, TabsPage
-│  │     ├─ components/  # Shared UI: CodeCard, CouponFormModal, CouponDetailModal, etc.
+│  │     ├─ components/  # Shared UI: CodeCard, ChannelFilterChips, CouponFilterToolbar, CouponFormModal, CouponDetailModal, etc.
 │  │     ├─ stores/      # Pinia: settings, coupons, channels
 │  │     ├─ db/          # Drizzle schema, client, migrations, seed data
-│  │     ├─ utils/       # Pure logic: calendar grid, date formatting, sort options
+│  │     ├─ utils/       # Pure logic: calendar grid, channel selection, date formatting, sort options
 │  │     └─ i18n/        # vue-i18n setup and locale files
 │  └─ api/           # Placeholder for a future sync backend (Prisma) — not yet implemented
 ├─ openspec/         # Spec-driven development data: specs, change proposals, archive
